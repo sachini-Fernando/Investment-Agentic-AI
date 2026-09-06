@@ -52,6 +52,9 @@ def _hash_text(*parts: str) -> str:
     digest.update("||".join(part or "" for part in parts).encode("utf-8")) 
     return digest.hexdigest()
 
+####################################
+#clean_price_frame()
+####################################
 def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame: 
      if not PANDAS_AVAILABLE: 
          return frame 
@@ -71,20 +74,23 @@ def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame:
      frame[numeric_columns] = frame[numeric_columns].interpolate(limit_direction="both") 
      frame[numeric_columns] = frame[numeric_columns].ffill().bfill() 
      return frame 
+
+
+#######################################
+#MarketDataIngestion 
+#######################################
+@dataclass 
+class MarketDataIngestion: 
+     """ 
+     Fetches and normalizes market data from multiple providers. 
+     """ 
  
-# @dataclass 
-# class MarketDataIngestion: 
-#     """ 
-#     Fetches and normalizes market data from multiple providers. 
-#     """ 
+     alpha_vantage_api_key: Optional[str] = None 
+     news_api_key: Optional[str] = None 
  
-#     alpha_vantage_api_key: Optional[str] = None 
-#     news_api_key: Optional[str] = None 
- 
-#     def __post_init__(self) -> None: 
-#         self.alpha_vantage_api_key = self.alpha_vantage_api_key or 
-# os.getenv("ALPHA_VANTAGE_API_KEY") 
-#         self.news_api_key = self.news_api_key or os.getenv("NEWS_API_KEY") 
+     def __post_init__(self) -> None: 
+         self.alpha_vantage_api_key = self.alpha_vantage_api_key or os.getenv("ALPHA_VANTAGE_API_KEY") 
+         self.news_api_key = self.news_api_key or os.getenv("NEWS_API_KEY") 
  
 #     def fetch_yfinance_snapshot(self, ticker: str) -> Dict[str, Any]: 
 #         if not YFINANCE_AVAILABLE: 
