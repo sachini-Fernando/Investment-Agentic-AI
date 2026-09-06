@@ -36,3 +36,55 @@ except ImportError:
     logger.warning(
         "MongoDB checkpoint support not available. Install langgraph-checkpoint-mongodb for MongoDB persistence."
     )
+
+
+##################################
+# Basic Investment Graph
+##################################
+def create_investment_graph(checkpointer=None):
+    """
+        Creates the LangGraph workflow for investment analysis.
+
+        Args:
+            checkpointer: Optional checkpointer for state persistence (e.g.,
+    MongoDB)
+
+        Returns:
+            Compiled LangGraph workflow
+    """
+    logger.info("Creating Investment Agentic AI workflow graph")
+
+    # Create the state graph
+    workflow = StateGraph(InvestmentState)
+
+    # Add all agent nodes to the graph
+    workflow.add_node("data_acquisition_agent", data_acquisition_agent)
+    workflow.add_node("sentiment_nlp_agent", sentiment_nlp_agent)
+    workflow.add_node("financial_reasoning_agent", financial_reasoning_agent)
+    workflow.add_node("risk_assessment_agent", risk_assessment_agent)
+
+    # Define the workflow edges (sequential execution)
+    # Start with Data Acquisition Agent
+    workflow.set_entry_point("data_acquisition_agent")
+
+    # Data Acquisition -> Sentiment & NLP
+    workflow.add_edge("data_acquisition_agent", "sentiment_nlp_agent")
+
+    # Sentiment & NLP -> Financial Reasoning
+    workflow.add_edge("sentiment_nlp_agent", "financial_reasoning_agent")
+
+    # Financial Reasoning -> Risk Assessment
+    workflow.add_edge("financial_reasoning_agent", "risk_assessment_agent")
+
+    # Risk Assessment -> END
+    workflow.add_edge("risk_assessment_agent", END)
+
+    # Compile the graph with optional checkpointer
+    if checkpointer:
+        app = workflow.compile(checkpointer=checkpointer)
+        logger.info("Graph compiled with checkpointer")
+    else:
+        app = workflow.compile()
+        logger.info("Graph compiled without checkpointer")
+
+    return app
