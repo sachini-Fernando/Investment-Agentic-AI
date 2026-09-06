@@ -91,36 +91,37 @@ class MarketDataIngestion:
      def __post_init__(self) -> None: 
          self.alpha_vantage_api_key = self.alpha_vantage_api_key or os.getenv("ALPHA_VANTAGE_API_KEY") 
          self.news_api_key = self.news_api_key or os.getenv("NEWS_API_KEY") 
+
+################################
+#yFinance Snapshot 
+################################
+     def fetch_yfinance_snapshot(self, ticker: str) -> Dict[str, Any]: 
+         if not YFINANCE_AVAILABLE: 
+             return {} 
  
-#     def fetch_yfinance_snapshot(self, ticker: str) -> Dict[str, Any]: 
-#         if not YFINANCE_AVAILABLE: 
-#             return {} 
- 
-#         try: 
-#             stock = yf.Ticker(ticker) 
-#             info = stock.info or {} 
-#             return { 
-#                 "ticker": ticker.upper(), 
-#                 "symbol": ticker.upper(), 
-#                 "current_price": _safe_float(info.get("currentPrice") or 
-# info.get("regularMarketPrice")), 
-#                 "previous_close": _safe_float(info.get("previousClose")),
-#                  "open": _safe_float(info.get("open")), 
-#                 "high": _safe_float(info.get("dayHigh")), 
-#                 "low": _safe_float(info.get("dayLow")), 
-#                 "volume": _safe_int(info.get("volume")), 
-#                 "market_cap": _safe_float(info.get("marketCap")), 
-#                 "52_week_high": _safe_float(info.get("fiftyTwoWeekHigh")), 
-#                 "52_week_low": _safe_float(info.get("fiftyTwoWeekLow")), 
-#                 "avg_volume": _safe_int(info.get("averageVolume")), 
-#                 "shares_outstanding": 
-# _safe_int(info.get("sharesOutstanding")), 
-#                 "as_of": datetime.utcnow().isoformat(), 
-#                 "source": "yfinance", 
-#             } 
-#         except Exception as exc: 
-#             logger.warning(f"yFinance quote fetch failed for {ticker}: {exc}") 
-#             return {} 
+         try: 
+             stock = yf.Ticker(ticker) 
+             info = stock.info or {} 
+             return { 
+                 "ticker": ticker.upper(), 
+                 "symbol": ticker.upper(), 
+                 "current_price": _safe_float(info.get("currentPrice") or info.get("regularMarketPrice")), 
+                 "previous_close": _safe_float(info.get("previousClose")),
+                  "open": _safe_float(info.get("open")), 
+                 "high": _safe_float(info.get("dayHigh")), 
+                 "low": _safe_float(info.get("dayLow")), 
+                 "volume": _safe_int(info.get("volume")), 
+                 "market_cap": _safe_float(info.get("marketCap")), 
+                 "52_week_high": _safe_float(info.get("fiftyTwoWeekHigh")), 
+                 "52_week_low": _safe_float(info.get("fiftyTwoWeekLow")), 
+                 "avg_volume": _safe_int(info.get("averageVolume")), 
+                 "shares_outstanding": _safe_int(info.get("sharesOutstanding")), 
+                 "as_of": datetime.utcnow().isoformat(), 
+                 "source": "yfinance", 
+             } 
+         except Exception as exc: 
+             logger.warning(f"yFinance quote fetch failed for {ticker}: {exc}") 
+             return {} 
  
 #     def fetch_yfinance_history(self, ticker: str, period: str = "2y", 
 # interval: str = "1d") -> List[Dict[str, Any]]: 
