@@ -123,9 +123,9 @@ class MarketDataIngestion:
              logger.warning(f"yFinance quote fetch failed for {ticker}: {exc}") 
              return {} 
 
-##########################
+#################################
 # yFinance history + fundamentals
-########################## 
+################################# 
      def fetch_yfinance_history(self, ticker: str, period: str = "2y", interval: str = "1d") -> List[Dict[str, Any]]: 
          if not YFINANCE_AVAILABLE: 
              return [] 
@@ -160,88 +160,92 @@ class MarketDataIngestion:
          except Exception as exc: 
              logger.warning(f"yFinance history fetch failed for {ticker}:{exc}") 
              return [] 
+
+
+#################################
+#yFinance fundamentals fetching
+#################################          
  
-#     def fetch_yfinance_fundamentals(self, ticker: str) -> Dict[str, Any]: 
-#         if not YFINANCE_AVAILABLE: 
-#             return {} 
+     def fetch_yfinance_fundamentals(self, ticker: str) -> Dict[str, Any]: 
+         if not YFINANCE_AVAILABLE: 
+             return {} 
  
-#         try: 
-#             stock = yf.Ticker(ticker) 
-#             info = stock.info or {} 
-#             financials = stock.financials 
-#             balance_sheet = stock.balance_sheet 
-#             cash_flow = stock.cashflow 
+         try: 
+             stock = yf.Ticker(ticker) 
+             info = stock.info or {} 
+             financials = stock.financials 
+             balance_sheet = stock.balance_sheet 
+             cash_flow = stock.cashflow 
  
-#             company_info = { 
-#                 "ticker": ticker.upper(), 
-#                 "name": info.get("longName") or info.get("shortName"), 
-#                 "sector": info.get("sector"), 
-#                 "industry": info.get("industry"), 
-#                 "description": info.get("longBusinessSummary"), 
-#                 "website": info.get("website"), 
-#                 "employees": _safe_int(info.get("fullTimeEmployees")), 
-#                 "country": info.get("country"), 
-#                 "currency": info.get("currency"), 
-#                 "exchange": info.get("exchange"), 
-#                 "pe_ratio": _safe_float(info.get("trailingPE")), 
-#                 "forward_pe": _safe_float(info.get("forwardPE")), 
-#                 "peg_ratio": _safe_float(info.get("pegRatio")), 
-#                 "pb_ratio": _safe_float(info.get("priceToBook")), 
-#                 "ps_ratio": 
-# _safe_float(info.get("priceToSalesTrailing12Months")), 
-#                 "eps": _safe_float(info.get("trailingEps")), 
-#                 "forward_eps": _safe_float(info.get("forwardEps")), 
-#                 "dividend_yield": _safe_float(info.get("dividendYield")), 
-#                 "dividend_rate": _safe_float(info.get("dividendRate")), 
-#                 "payout_ratio": _safe_float(info.get("payoutRatio")), 
-#                 "beta": _safe_float(info.get("beta")), 
-#                 "profit_margin": _safe_float(info.get("profitMargins")), 
-#                 "operating_margin": _safe_float(info.get("operatingMargins")), 
-#                 "return_on_assets": _safe_float(info.get("returnOnAssets")), 
-#                 "return_on_equity": _safe_float(info.get("returnOnEquity")), 
-#                  "revenue_per_share": _safe_float(info.get("revenuePerShare")), 
-#                 "quarterly_revenue_growth": _safe_float(info.get("revenueQuarterlyGrowth")), 
-#                 "earnings_growth": _safe_float(info.get("earningsQuarterlyGrowth")), 
-#                 "52_week_change": _safe_float(info.get("52WeekChange")), 
-#                 "market_cap": _safe_float(info.get("marketCap")), 
-#                 "shares_outstanding": _safe_int(info.get("sharesOutstanding")), 
-#                 "current_price": _safe_float(info.get("currentPrice") or info.get("regularMarketPrice")), 
-#                 "source": "yfinance", 
-#             } 
+             company_info = { 
+                 "ticker": ticker.upper(), 
+                 "name": info.get("longName") or info.get("shortName"), 
+                 "sector": info.get("sector"), 
+                 "industry": info.get("industry"), 
+                 "description": info.get("longBusinessSummary"), 
+                 "website": info.get("website"), 
+                 "employees": _safe_int(info.get("fullTimeEmployees")), 
+                 "country": info.get("country"), 
+                 "currency": info.get("currency"), 
+                 "exchange": info.get("exchange"), 
+                 "pe_ratio": _safe_float(info.get("trailingPE")), 
+                 "forward_pe": _safe_float(info.get("forwardPE")), 
+                 "peg_ratio": _safe_float(info.get("pegRatio")), 
+                 "pb_ratio": _safe_float(info.get("priceToBook")), 
+                 "ps_ratio": _safe_float(info.get("priceToSalesTrailing12Months")), 
+                 "eps": _safe_float(info.get("trailingEps")), 
+                 "forward_eps": _safe_float(info.get("forwardEps")), 
+                 "dividend_yield": _safe_float(info.get("dividendYield")), 
+                 "dividend_rate": _safe_float(info.get("dividendRate")), 
+                 "payout_ratio": _safe_float(info.get("payoutRatio")), 
+                 "beta": _safe_float(info.get("beta")), 
+                 "profit_margin": _safe_float(info.get("profitMargins")), 
+                 "operating_margin": _safe_float(info.get("operatingMargins")), 
+                 "return_on_assets": _safe_float(info.get("returnOnAssets")), 
+                 "return_on_equity": _safe_float(info.get("returnOnEquity")), 
+                  "revenue_per_share": _safe_float(info.get("revenuePerShare")), 
+                 "quarterly_revenue_growth": _safe_float(info.get("revenueQuarterlyGrowth")), 
+                 "earnings_growth": _safe_float(info.get("earningsQuarterlyGrowth")), 
+                 "52_week_change": _safe_float(info.get("52WeekChange")), 
+                 "market_cap": _safe_float(info.get("marketCap")), 
+                 "shares_outstanding": _safe_int(info.get("sharesOutstanding")), 
+                 "current_price": _safe_float(info.get("currentPrice") or info.get("regularMarketPrice")), 
+                 "source": "yfinance", 
+             } 
  
-#             latest_financials = financials.iloc[:, 0].to_dict() if not financials.empty else {} 
-#             latest_balance = balance_sheet.iloc[:, 0].to_dict() if not balance_sheet.empty else {} 
-#             latest_cash_flow = cash_flow.iloc[:, 0].to_dict() if not cash_flow.empty else {} 
+             latest_financials = financials.iloc[:, 0].to_dict() if not financials.empty else {} 
+             latest_balance = balance_sheet.iloc[:, 0].to_dict() if not balance_sheet.empty else {} 
+             latest_cash_flow = cash_flow.iloc[:, 0].to_dict() if not cash_flow.empty else {} 
  
-#             return { 
-#                 "company_info": company_info, 
-#                 "financial_statements": { 
-#                     "income_statement": { 
-#                         "total_revenue": _safe_float(latest_financials.get("Total Revenue")), 
-#                         "cost_of_revenue": _safe_float(latest_financials.get("Cost Of Revenue")), 
-#                         "gross_profit": _safe_float(latest_financials.get("Gross Profit")), 
-#                         "operating_income": _safe_float(latest_financials.get("Operating Income")), 
-#                         "net_income": _safe_float(latest_financials.get("Net Income")), 
-#                         "ebitda": _safe_float(latest_financials.get("EBITDA")), 
-#                     }, 
-#                     "balance_sheet": { 
-#                         "total_assets": _safe_float(latest_balance.get("Total Assets")), 
-#                         "total_liabilities": _safe_float(latest_balance.get("Total Liab")), 
-#                         "shareholders_equity": _safe_float(latest_balance.get("Total Stockholder Equity")), 
-#                         "cash_and_equivalents": _safe_float(latest_balance.get("Cash And Cash Equivalents")), 
-#                         "total_debt": _safe_float(latest_balance.get("Total Debt")), 
-#                     }, 
-#                     "cash_flow": { 
-#                         "operating_cash_flow": _safe_float(latest_cash_flow.get("Operating Cash Flow")), 
-#                         "capital_expenditure": _safe_float(latest_cash_flow.get("Capital Expenditure")), 
-#                         "free_cash_flow": _safe_float(latest_cash_flow.get("Free Cash Flow")), 
-#                         "dividend_payments": _safe_float(latest_cash_flow.get("Dividends Paid")), 
-#                     }, 
-#                 }, 
-#             } 
-#         except Exception as exc: 
-#             logger.warning(f"yFinance fundamentals fetch failed for {ticker}: {exc}") 
-#             return {"company_info": {}, "financial_statements": {}} 
+             return { 
+                 "company_info": company_info, 
+                 "financial_statements": { 
+                     "income_statement": { 
+                         "total_revenue": _safe_float(latest_financials.get("Total Revenue")), 
+                         "cost_of_revenue": _safe_float(latest_financials.get("Cost Of Revenue")), 
+                         "gross_profit": _safe_float(latest_financials.get("Gross Profit")), 
+                         "operating_income": _safe_float(latest_financials.get("Operating Income")), 
+                         "net_income": _safe_float(latest_financials.get("Net Income")), 
+                         "ebitda": _safe_float(latest_financials.get("EBITDA")), 
+                     }, 
+                     "balance_sheet": { 
+                         "total_assets": _safe_float(latest_balance.get("Total Assets")), 
+                         "total_liabilities": _safe_float(latest_balance.get("Total Liab")), 
+                         "shareholders_equity": _safe_float(latest_balance.get("Total Stockholder Equity")), 
+                         "cash_and_equivalents": _safe_float(latest_balance.get("Cash And Cash Equivalents")), 
+                         "total_debt": _safe_float(latest_balance.get("Total Debt")), 
+                     }, 
+                     "cash_flow": { 
+                         "operating_cash_flow": _safe_float(latest_cash_flow.get("Operating Cash Flow")), 
+                         "capital_expenditure": _safe_float(latest_cash_flow.get("Capital Expenditure")), 
+                         "free_cash_flow": _safe_float(latest_cash_flow.get("Free Cash Flow")), 
+                         "dividend_payments": _safe_float(latest_cash_flow.get("Dividends Paid")), 
+                     }, 
+                 }, 
+             } 
+         except Exception as exc: 
+             logger.warning(f"yFinance fundamentals fetch failed for {ticker}: {exc}") 
+             return {"company_info": {}, "financial_statements": {}} 
  
 #     def fetch_alpha_vantage_quote(self, ticker: str) -> Dict[str, Any]: 
 #         if not self.alpha_vantage_api_key: 
