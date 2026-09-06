@@ -319,20 +319,32 @@ def _heuristic_synthesis(
     ]
 
     return {
-        "recommendation": recommendation,
-        "confidence": round(
-            confidence,
-            2
-        ),
-        "reasoning": rationale,
-        "decision_factors": decision_factors,
-        "summary": (
-            "Heuristic synthesis used because "
-            "Gemini was unavailable."
-        ),
-        "raw_response": None,
-        "source": "heuristic",
-    }
+    "recommendation": recommendation,
+
+    "confidence": round(
+        confidence,
+        2
+    ),
+
+    "reasoning": rationale,
+
+    "decision_factors": decision_factors,
+
+    "risk_notes": [],
+
+    "upside_catalysts": [],
+
+    "downside_catalysts": [],
+
+    "summary": (
+        "Heuristic synthesis used because "
+        "Gemini was unavailable."
+    ),
+
+    "raw_response": None,
+
+    "source": "heuristic",
+}
 
 @dataclass
 class GeminiRecommendationEngine:
@@ -448,110 +460,138 @@ class GeminiRecommendationEngine:
         "when confidence is weak."
     )
 
-    def generate(
-    self,
-    payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    def generate(self,payload: Dict[str, Any]) -> Dict[str, Any]:
 
-    model = self._build_model()
+        model = self._build_model()
 
-    if model is None:
-    return _heuristic_synthesis(payload)
+        if model is None:
+        return _heuristic_synthesis(payload)
 
-    prompt = self.build_prompt(payload)
-
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": self.temperature,
-                "max_output_tokens": self.max_output_tokens,
-            },
-        )
-
-        raw_text = getattr(
-            response,
-            "text",
-            ""
-        ) or ""
-
-        parsed = _safe_json_loads(raw_text)
-
-        recommendation = _normalize_recommendation(
-            parsed.get("recommendation")
-        )
-
-        confidence = parsed.get(
-            "confidence",
-            0.5
-        )
+        prompt = self.build_prompt(payload)
 
         try:
-            confidence = float(confidence)
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": self.temperature,
+                    "max_output_tokens": self.max_output_tokens,
+                },
+            )
 
-        except Exception:
-            confidence = 0.5
+            raw_text = getattr(
+                response,
+                "text",
+                ""
+            ) or ""
 
-        confidence = max(
-            0.0,
-            min(1.0, confidence)
-        )
+            parsed = _safe_json_loads(raw_text)
 
-        reasoning = parsed.get(
-            "reasoning"
-        ) or []
+            recommendation = _normalize_recommendation(
+                parsed.get("recommendation")
+            )
 
-        if isinstance(reasoning, str):
-            reasoning = [reasoning]
+            confidence = parsed.get(
+                "confidence",
+                0.5
+            )
 
-        reasoning = [
-            str(item)
-            for item in reasoning
-            if str(item).strip()
-        ]
+            try:
+                confidence = float(confidence)
 
-        decision_factors = (
-            parsed.get("decision_factors")
+            except Exception:
+                confidence = 0.5
+
+            confidence = max(
+                0.0,
+                min(1.0, confidence)
+            )
+
+            reasoning = parsed.get(
+                "reasoning"
+            ) or []
+
+            if isinstance(reasoning, str):
+                reasoning = [reasoning]
+
+            reasoning = [
+                str(item)
+                for item in reasoning
+                if str(item).strip()
+            ]
+
+            decision_factors = (
+                parsed.get("decision_factors")
+                or []
+            )
+
+            if not isinstance(
+                decision_factors,
+                list
+            ):
+                decision_factors = []
+
+            return {
+        "recommendation": recommendation,
+
+        "confidence": round(
+            confidence,
+            2
+        ),
+
+        "summary": (
+            str(
+                parsed.get("summary")
+                or ""
+            ).strip()
+            or "Gemini synthesized the available evidence."
+        ),
+
+        "reasoning": (
+            reasoning
+            or [
+                "Gemini returned no detailed reasoning; "
+                "using summary only."
+            ]
+        ),
+
+        "decision_factors": decision_factors,
+
+        "risk_notes": (
+            parsed.get("risk_notes")
             or []
+        ),
+
+        "upside_catalysts": (
+            parsed.get("upside_catalysts")
+            or []
+        ),
+
+        "downside_catalysts": (
+            parsed.get("downside_catalysts")
+            or []
+        ),
+
+        "raw_response": raw_text,
+
+        "source": "gemini",
+    }
+
+        except Exception as exc:
+        logger.warning(
+            f"Gemini recommendation generation failed: {exc}"
         )
 
-        if not isinstance(
-            decision_factors,
-            list
-        ):
-            decision_factors = []
+        return _heuristic_synthesis(payload)
 
-        return {
-            "recommendation": recommendation,
-            "confidence": round(
-                confidence,
-                2
-            ),
-            "summary": (
-                str(
-                    parsed.get("summary")
-                    or ""
-                ).strip()
-                or "Gemini synthesized the available evidence."
-            ),
-            "reasoning": (
-                reasoning
-                or [
-                    "Gemini returned no detailed reasoning; "
-                    "using summary only."
-                ]
-            ),
-            "decision_factors": decision_factors,
-            "raw_response": raw_text,
-            "source": "gemini",
-        }
+    def generate_investment_recommendation(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convenience wrapper for generating a transparent
+        investment recommendation.
+        """
 
-    except Exception as exc:
-    logger.warning(
-        f"Gemini recommendation generation failed: {exc}"
-    )
+        engine = GeminiRecommendationEngine()
 
-    return _heuristic_synthesis(payload)
+        return engine.generate(payload)
 
 
 
