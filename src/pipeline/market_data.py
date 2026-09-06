@@ -52,26 +52,25 @@ def _hash_text(*parts: str) -> str:
     digest.update("||".join(part or "" for part in parts).encode("utf-8")) 
     return digest.hexdigest()
 
-# def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame: 
-#     if not PANDAS_AVAILABLE: 
-#         return frame 
+def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame: 
+     if not PANDAS_AVAILABLE: 
+         return frame 
  
-#     if frame.empty: 
-#         return frame 
+     if frame.empty: 
+         return frame 
  
-#     frame = frame.copy() 
-#     frame.columns = [str(col).lower() for col in frame.columns] 
+     frame = frame.copy() 
+     frame.columns = [str(col).lower() for col in frame.columns] 
  
-#     for column in ["open", "high", "low", "close", "adj close", "volume"]: 
-#         if column in frame.columns: 
-#             frame[column] = pd.to_numeric(frame[column], errors="coerce") 
+     for column in ["open", "high", "low", "close", "adj close", "volume"]: 
+         if column in frame.columns: 
+             frame[column] = pd.to_numeric(frame[column], errors="coerce") 
  
-#     frame = frame.sort_index() 
-#     numeric_columns = frame.select_dtypes(include=["number"]).columns 
-#     frame[numeric_columns] = 
-# frame[numeric_columns].interpolate(limit_direction="both") 
-#     frame[numeric_columns] = frame[numeric_columns].ffill().bfill() 
-#     return frame 
+     frame = frame.sort_index() 
+     numeric_columns = frame.select_dtypes(include=["number"]).columns 
+     frame[numeric_columns] = frame[numeric_columns].interpolate(limit_direction="both") 
+     frame[numeric_columns] = frame[numeric_columns].ffill().bfill() 
+     return frame 
  
 # @dataclass 
 # class MarketDataIngestion: 
