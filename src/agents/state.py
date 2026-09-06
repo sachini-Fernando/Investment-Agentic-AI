@@ -3,6 +3,7 @@ from langgraph.graph.message import add_messages  # type: ignore
 
 class InvestmentState(TypedDict):
     # === INPUT ===
+    analysis_id: Optional[str]
     ticker: str
     user_query: Optional[str]
     

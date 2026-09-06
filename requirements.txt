@@ -62,4 +62,8 @@ pytest-cov>=4.0.0
 # MACHINE LEARNING (for LSTM models)
 # ============================================
 # tensorflow>=2.13.0  # Optional - if using TensorFlow
-# torch>=2.0.0        # Optional - if using PyTorch
+torch>=2.0.0          # Required for transformers zoedepth
+torchvision>=0.15.0   # Required for transformers zoedepth v2 transforms
+
+chromadb>=0.5.0
+spacy>=3.7.0

@@ -8,6 +8,12 @@ from typing import Optional
 from pymongo import MongoClient
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from loguru import logger
+from dotenv import load_dotenv
+
+# ============================================
+# FIX: Load environment variables FIRST
+# ============================================
+load_dotenv()
 
 
 def get_mongodb_uri() -> str:
@@ -20,6 +26,9 @@ def get_mongodb_uri() -> str:
     Raises:
         ValueError: If MONGODB_URI is not set in environment
     """
+    # Reload .env to ensure latest values
+    load_dotenv()
+    
     mongodb_uri = os.getenv("MONGODB_URI")
     
     if not mongodb_uri:
@@ -39,7 +48,10 @@ def get_mongodb_database_name() -> str:
     Returns:
         MongoDB database name
     """
-    return os.getenv("MONGODB_DATABASE", "investment_agents_db")
+    # Reload .env to ensure latest values
+    load_dotenv()
+    
+    return os.getenv("MONGODB_DB_NAME", os.getenv("MONGODB_DATABASE", "investment_agents_db"))
 
 
 def get_mongodb_collection_name() -> str:
@@ -50,7 +62,10 @@ def get_mongodb_collection_name() -> str:
     Returns:
         MongoDB collection name for checkpoints
     """
-    return os.getenv("MONGODB_CHECKPOINT_COLLECTION", "agent_checkpoints")
+    # Reload .env to ensure latest values
+    load_dotenv()
+    
+    return os.getenv("MONGODB_COLLECTION_NAME", os.getenv("MONGODB_CHECKPOINT_COLLECTION", "checkpoints"))
 
 
 def create_mongodb_checkpointer(
@@ -78,6 +93,9 @@ def create_mongodb_checkpointer(
         Exception: If MongoDB connection fails
     """
     try:
+        # Reload .env to ensure latest values
+        load_dotenv()
+        
         # Get MongoDB URI
         if not mongodb_uri:
             mongodb_uri = get_mongodb_uri()
@@ -91,7 +109,7 @@ def create_mongodb_checkpointer(
         logger.info(f"Creating MongoDB checkpointer for database: {database_name}, collection: {collection_name}")
         
         # Create MongoDB client
-        client = MongoClient(mongodb_uri)
+        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
         
         # Test connection
         client.admin.command('ping')
@@ -140,10 +158,13 @@ def test_mongodb_connection(mongodb_uri: Optional[str] = None) -> bool:
         True if connection successful, False otherwise
     """
     try:
+        # Reload .env to ensure latest values
+        load_dotenv()
+        
         if not mongodb_uri:
             mongodb_uri = get_mongodb_uri()
         
-        client = MongoClient(mongodb_uri)
+        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         logger.info("MongoDB connection test successful")
         return True
@@ -174,6 +195,9 @@ def clear_mongodb_checkpoints(
         Exception: If deletion fails
     """
     try:
+        # Reload .env to ensure latest values
+        load_dotenv()
+        
         if not mongodb_uri:
             mongodb_uri = get_mongodb_uri()
         if not database_name:
