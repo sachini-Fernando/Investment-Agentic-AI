@@ -246,41 +246,45 @@ class MarketDataIngestion:
          except Exception as exc: 
              logger.warning(f"yFinance fundamentals fetch failed for {ticker}: {exc}") 
              return {"company_info": {}, "financial_statements": {}} 
+
+
+############################################
+#add Alpha Vantage market overview fetching
+############################################
+     def fetch_alpha_vantage_quote(self, ticker: str) -> Dict[str, Any]: 
+         if not self.alpha_vantage_api_key: 
+             return {} 
  
-#     def fetch_alpha_vantage_quote(self, ticker: str) -> Dict[str, Any]: 
-#         if not self.alpha_vantage_api_key: 
-#             return {} 
+         try: 
+             response = requests.get( 
+                 "https://www.alphavantage.co/query", 
+                 params={ 
+                     "function": "GLOBAL_QUOTE", 
+                     "symbol": ticker, 
+                     "apikey": self.alpha_vantage_api_key, 
+                 }, 
+                 timeout=20, 
+             ) 
+             response.raise_for_status() 
+             payload = response.json().get("Global Quote", {}) 
+             if not payload: 
+                 return {} 
  
-#         try: 
-#             response = requests.get( 
-#                 "https://www.alphavantage.co/query", 
-#                 params={ 
-#                     "function": "GLOBAL_QUOTE", 
-#                     "symbol": ticker, 
-#                     "apikey": self.alpha_vantage_api_key, 
-#                 }, 
-#                 timeout=20, 
-#             ) 
-#             response.raise_for_status() 
-#             payload = response.json().get("Global Quote", {}) 
-#             if not payload: 
-#                 return {} 
- 
-#             return { 
-#                 "ticker": ticker.upper(), 
-#                 "current_price": _safe_float(payload.get("05. price")), 
-#                 "open": _safe_float(payload.get("02. open")), 
-#                 "high": _safe_float(payload.get("03. high")), 
-#                 "low": _safe_float(payload.get("04. low")), 
-#                 "previous_close": _safe_float(payload.get("08. previous close")), 
-#                 "volume": _safe_int(payload.get("06. volume")), 
-#                   "change": _safe_float(payload.get("09. change")), 
-#                 "change_percent": payload.get("10. change percent"), 
-#                 "source": "alpha_vantage", 
-#             } 
-#         except Exception as exc: 
-#             logger.warning(f"Alpha Vantage quote fetch failed for {ticker}: {exc}") 
-#             return {} 
+             return { 
+                 "ticker": ticker.upper(), 
+                 "current_price": _safe_float(payload.get("05. price")), 
+                 "open": _safe_float(payload.get("02. open")), 
+                 "high": _safe_float(payload.get("03. high")), 
+                 "low": _safe_float(payload.get("04. low")), 
+                 "previous_close": _safe_float(payload.get("08. previous close")), 
+                 "volume": _safe_int(payload.get("06. volume")), 
+                   "change": _safe_float(payload.get("09. change")), 
+                 "change_percent": payload.get("10. change percent"), 
+                 "source": "alpha_vantage", 
+             } 
+         except Exception as exc: 
+             logger.warning(f"Alpha Vantage quote fetch failed for {ticker}: {exc}") 
+             return {} 
  
 #     def fetch_alpha_vantage_overview(self, ticker: str) -> Dict[str, Any]: 
 #         if not self.alpha_vantage_api_key: 
