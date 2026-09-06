@@ -160,3 +160,39 @@ def create_conditional_investment_graph(checkpointer=None):
         logger.info("Conditional graph compiled without checkpointer")
 
     return app
+
+
+#################################
+# MongoDB Graph Support
+#################################
+def create_investment_graph_with_mongodb():
+    """
+    Creates the LangGraph workflow with MongoDB checkpointing.
+
+    Returns:
+        Compiled LangGraph workflow with MongoDB checkpointer
+
+    Raises:
+        Exception: If MongoDB is not available or connection fails
+    """
+    if not MONGODB_AVAILABLE:
+        raise Exception(
+            "MongoDB checkpoint support is not available. "
+            "Please install langgraph-checkpoint-mongodb: pip install langgraph-checkpoint-mongodb"
+        )
+
+    logger.info(
+        "Creating Investment Agentic AI workflow graph with MongoDB checkpointing"
+    )
+
+    # Test MongoDB connection first
+    if not test_mongodb_connection():
+        raise Exception(
+            "MongoDB connection test failed. Cannot create graph with MongoDB checkpointing."
+        )
+
+    # Create MongoDB checkpointer
+    checkpointer = create_mongodb_checkpointer_with_env()
+
+    # Create graph with checkpointer
+    return create_investment_graph(checkpointer=checkpointer)
