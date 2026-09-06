@@ -289,7 +289,7 @@ class MarketDataIngestion:
 
 
 ########################################################
-#add Alpha Vantage historical price fetching
+#add Alpha Vantage overview
 ###################################################
      def fetch_alpha_vantage_overview(self, ticker: str) -> Dict[str, Any]: 
          if not self.alpha_vantage_api_key: 
@@ -338,37 +338,43 @@ class MarketDataIngestion:
          except Exception as exc: 
              logger.warning(f"Alpha Vantage overview fetch failed for {ticker}: {exc}") 
              return {} 
- 
-#     def fetch_alpha_vantage_history(self, ticker: str, outputsize: str = 
-# "compact") -> List[Dict[str, Any]]: 
-#         if not self.alpha_vantage_api_key: 
-#             return [] 
- 
-#         try: 
-#             response = requests.get( 
-#                 "https://www.alphavantage.co/query", 
-#                 params={ 
-#                     "function": "TIME_SERIES_DAILY_ADJUSTED", 
-#                     "symbol": ticker, 
-#                     "outputsize": outputsize, 
-#                     "apikey": self.alpha_vantage_api_key, 
-#                 }, 
-#                 timeout=20, 
-#             ) 
-#             response.raise_for_status() 
-#             payload = response.json().get("Time Series (Daily)", {}) 
-#             records: List[Dict[str, Any]] = [] 
-#             for date, values in payload.items(): 
-#                 records.append({ 
-#                     "date": date, 
-#                     "open": _safe_float(values.get("1. open")), 
-#                     "high": _safe_float(values.get("2. high")), 
-#                     "low": _safe_float(values.get("3. low")), 
-#                     "close": _safe_float(values.get("4. close")), 
-#                     "adjusted_close": _safe_float(values.get("5. adjusted close")), 
-#                     "volume": _safe_int(values.get("6. volume")), 
-#                     "source": "alpha_vantage", 
-#                 })
 
+##############################################
+#add Alpha Vantage historical price fetching
+##############################################
+def fetch_alpha_vantage_history(self, ticker: str, outputsize: str = 
+"compact") -> List[Dict[str, Any]]: 
+        if not self.alpha_vantage_api_key: 
+            return [] 
+ 
+        try: 
+            response = requests.get( 
+                "https://www.alphavantage.co/query", 
+                params={ 
+                    "function": "TIME_SERIES_DAILY_ADJUSTED", 
+                    "symbol": ticker, 
+                    "outputsize": outputsize, 
+                    "apikey": self.alpha_vantage_api_key, 
+                }, 
+                timeout=20, 
+            ) 
+            response.raise_for_status() 
+            payload = response.json().get("Time Series (Daily)", {}) 
+            records: List[Dict[str, Any]] = [] 
+            for date, values in payload.items(): 
+                records.append({ 
+                    "date": date, 
+                    "open": _safe_float(values.get("1. open")), 
+                    "high": _safe_float(values.get("2. high")), 
+                    "low": _safe_float(values.get("3. low")), 
+                    "close": _safe_float(values.get("4. close")), 
+                    "adjusted_close": _safe_float(values.get("5. adjusted close")), 
+                    "volume": _safe_int(values.get("6. volume")), 
+                    "source": "alpha_vantage", 
+                }) 
+            return sorted(records, key=lambda item: item["date"]) 
+        except Exception as exc: 
+            logger.warning(f"Alpha Vantage history fetch failed for {ticker}: {exc}") 
+            return [] 
 
 
