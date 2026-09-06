@@ -196,3 +196,114 @@ def create_investment_graph_with_mongodb():
 
     # Create graph with checkpointer
     return create_investment_graph(checkpointer=checkpointer)
+
+
+##############################################
+# Investment Analysis Runner
+##############################################
+def run_investment_analysis(
+    ticker: str,
+    user_query: str = None,
+    use_conditional: bool = False,
+    use_mongodb: bool = False,
+    thread_id: Optional[str] = None,
+):
+    """
+        Runs the investment analysis workflow for a given ticker.
+
+        Args:
+            ticker: Stock ticker symbol (e.g., 'AAPL', 'GOOGL')
+            user_query: Optional user query for the analysis
+            use_conditional: Whether to use conditional routing
+            use_mongodb: Whether to use MongoDB for state persistence
+            thread_id: Optional thread ID for MongoDB checkpointing (required if
+    use_mongodb=True)
+
+        Returns:
+            Final state with all agent outputs
+    """
+    logger.info(f"Starting investment analysis for ticker: {ticker}")
+
+    # Initialize the state
+    initial_state: InvestmentState = {
+        "ticker": ticker,
+        "user_query": user_query,
+        "messages": [],
+        # Data Acquisition outputs
+        "stock_data": None,
+        "historical_prices": None,
+        "company_info": None,
+        "financial_statements": None,
+        "news_articles": None,
+        "search_results": None,
+        # Sentiment & NLP outputs
+        "sentiment_score": None,
+        "sentiment_confidence": None,
+        "sentiment_breakdown": None,
+        "news_summary": None,
+        "key_events": None,
+        "entity_sentiments": None,
+        "topic_analysis": None,
+        # Financial Reasoning outputs
+        "technical_indicators": None,
+        "price_forecast": None,
+        "fundamental_analysis": None,
+        "market_context": None,
+        "reasoning_chain": None,
+        "preliminary_recommendation": None,
+        "confidence_score": None,
+        "llm_recommendation": None,
+        "llm_confidence": None,
+        "llm_reasoning": None,
+        "llm_decision_factors": None,
+        "llm_summary": None,
+        "llm_raw_response": None,
+        # Risk Assessment outputs
+        "risk_metrics": None,
+        "risk_factors": None,
+        "validation_status": None,
+        "risk_adjusted_recommendation": None,
+        "final_recommendation": None,
+        "risk_level": None,
+        "position_sizing": None,
+        "stop_loss": None,
+        "take_profit": None,
+        # Metadata
+        "agent_execution_order": None,
+        "timestamps": None,
+        "errors": None,
+    }
+
+    # Create and run the graph
+    if use_mongodb:
+        if not MONGODB_AVAILABLE:
+            raise Exception(
+                "MongoDB checkpoint support is not available. "
+                "Please install langgraph-checkpoint-mongodb: py -m pip install langgraph-checkpoint-mongodb"
+            )
+        if not thread_id:
+            raise ValueError("thread_id is required when use_mongodb=True")
+
+        if use_conditional:
+            checkpointer = create_mongodb_checkpointer_with_env()
+            app = create_conditional_investment_graph(checkpointer=checkpointer)
+        else:
+            checkpointer = create_mongodb_checkpointer_with_env()
+            app = create_investment_graph(checkpointer=checkpointer)
+
+        # Run with thread_id for MongoDB checkpointing
+        config = {"configurable": {"thread_id": thread_id}}
+        result = app.invoke(initial_state, config=config)
+
+    else:
+        if use_conditional:
+            app = create_conditional_investment_graph()
+        else:
+            app = create_investment_graph()
+
+        # Run the workflow
+        result = app.invoke(initial_state)
+
+    logger.info(f"Investment analysis completed for {ticker}")
+
+    return result
