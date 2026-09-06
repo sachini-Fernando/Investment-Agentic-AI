@@ -285,55 +285,59 @@ class MarketDataIngestion:
          except Exception as exc: 
              logger.warning(f"Alpha Vantage quote fetch failed for {ticker}: {exc}") 
              return {} 
+
+
+
+########################################################
+#add Alpha Vantage historical price fetching
+###################################################
+     def fetch_alpha_vantage_overview(self, ticker: str) -> Dict[str, Any]: 
+         if not self.alpha_vantage_api_key: 
+             return {} 
  
-#     def fetch_alpha_vantage_overview(self, ticker: str) -> Dict[str, Any]: 
-#         if not self.alpha_vantage_api_key: 
-#             return {} 
+         try: 
+             response = requests.get( 
+                 "https://www.alphavantage.co/query", 
+                 params={ 
+                     "function": "OVERVIEW", 
+                     "symbol": ticker, 
+                     "apikey": self.alpha_vantage_api_key, 
+                 }, 
+                 timeout=20, 
+             ) 
+             response.raise_for_status() 
+             payload = response.json() 
+             if not payload or "Symbol" not in payload: 
+                 return {} 
  
-#         try: 
-#             response = requests.get( 
-#                 "https://www.alphavantage.co/query", 
-#                 params={ 
-#                     "function": "OVERVIEW", 
-#                     "symbol": ticker, 
-#                     "apikey": self.alpha_vantage_api_key, 
-#                 }, 
-#                 timeout=20, 
-#             ) 
-#             response.raise_for_status() 
-#             payload = response.json() 
-#             if not payload or "Symbol" not in payload: 
-#                 return {} 
- 
-#             return { 
-#                 "ticker": ticker.upper(), 
-#                 "name": payload.get("Name"), 
-#                 "sector": payload.get("Sector"), 
-#                 "industry": payload.get("Industry"), 
-#                 "description": payload.get("Description"), 
-#                 "market_cap": _safe_float(payload.get("MarketCapitalization")), 
-#                 "ebitda": _safe_float(payload.get("EBITDA")), 
-#                 "pe_ratio": _safe_float(payload.get("PERatio")), 
-#                 "peg_ratio": _safe_float(payload.get("PEGRatio")), 
-#                 "pb_ratio": _safe_float(payload.get("PriceToBookRatio")), 
-#                 "ps_ratio": _safe_float(payload.get("PriceToSalesRatioTTM")), 
-#                 "eps": _safe_float(payload.get("EPS")), 
-#                 "profit_margin": _safe_float(payload.get("ProfitMargin")), 
-#                 "operating_margin": _safe_float(payload.get("OperatingMarginTTM")), 
-#                 "return_on_assets": _safe_float(payload.get("ReturnOnAssetsTTM")),
-#                   "return_on_equity": _safe_float(payload.get("ReturnOnEquityTTM")), 
-#                 "dividend_yield": _safe_float(payload.get("DividendYield")), 
-#                 "quarterly_earnings_growth": _safe_float(payload.get("QuarterlyEarningsGrowthYOY")), 
-#                 "quarterly_revenue_growth": _safe_float(payload.get("QuarterlyRevenueGrowthYOY")), 
-#                 "beta": _safe_float(payload.get("Beta")), 
-#                 "52_week_high": _safe_float(payload.get("52WeekHigh")), 
-#                 "52_week_low": _safe_float(payload.get("52WeekLow")), 
-#                 "source": "alpha_vantage", 
-#             } 
-#         except Exception as exc: 
-#             logger.warning(f"Alpha Vantage overview fetch failed for {ticker}: 
-# {exc}") 
-#             return {} 
+             return { 
+                 "ticker": ticker.upper(), 
+                 "name": payload.get("Name"), 
+                 "sector": payload.get("Sector"), 
+                 "industry": payload.get("Industry"), 
+                 "description": payload.get("Description"), 
+                 "market_cap": _safe_float(payload.get("MarketCapitalization")), 
+                 "ebitda": _safe_float(payload.get("EBITDA")), 
+                 "pe_ratio": _safe_float(payload.get("PERatio")), 
+                 "peg_ratio": _safe_float(payload.get("PEGRatio")), 
+                 "pb_ratio": _safe_float(payload.get("PriceToBookRatio")), 
+                 "ps_ratio": _safe_float(payload.get("PriceToSalesRatioTTM")), 
+                 "eps": _safe_float(payload.get("EPS")), 
+                 "profit_margin": _safe_float(payload.get("ProfitMargin")), 
+                 "operating_margin": _safe_float(payload.get("OperatingMarginTTM")), 
+                 "return_on_assets": _safe_float(payload.get("ReturnOnAssetsTTM")),
+                   "return_on_equity": _safe_float(payload.get("ReturnOnEquityTTM")), 
+                 "dividend_yield": _safe_float(payload.get("DividendYield")), 
+                 "quarterly_earnings_growth": _safe_float(payload.get("QuarterlyEarningsGrowthYOY")), 
+                 "quarterly_revenue_growth": _safe_float(payload.get("QuarterlyRevenueGrowthYOY")), 
+                 "beta": _safe_float(payload.get("Beta")), 
+                 "52_week_high": _safe_float(payload.get("52WeekHigh")), 
+                 "52_week_low": _safe_float(payload.get("52WeekLow")), 
+                 "source": "alpha_vantage", 
+             } 
+         except Exception as exc: 
+             logger.warning(f"Alpha Vantage overview fetch failed for {ticker}: {exc}") 
+             return {} 
  
 #     def fetch_alpha_vantage_history(self, ticker: str, outputsize: str = 
 # "compact") -> List[Dict[str, Any]]: 
