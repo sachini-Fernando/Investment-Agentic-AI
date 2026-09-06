@@ -395,238 +395,238 @@ class MarketDataIngestion:
             return {}
 
 
-##############################################
-# add Alpha Vantage historical price fetching
-##############################################
-def fetch_alpha_vantage_history(
-    self, ticker: str, outputsize: str = "compact"
-) -> List[Dict[str, Any]]:
-    if not self.alpha_vantage_api_key:
-        return []
+    ##############################################
+    # add Alpha Vantage historical price fetching
+    ##############################################
+    def fetch_alpha_vantage_history(
+        self, ticker: str, outputsize: str = "compact"
+    ) -> List[Dict[str, Any]]:
+        if not self.alpha_vantage_api_key:
+            return []
 
-    try:
-        response = requests.get(
-            "https://www.alphavantage.co/query",
-            params={
-                "function": "TIME_SERIES_DAILY_ADJUSTED",
-                "symbol": ticker,
-                "outputsize": outputsize,
-                "apikey": self.alpha_vantage_api_key,
+        try:
+            response = requests.get(
+                "https://www.alphavantage.co/query",
+                params={
+                    "function": "TIME_SERIES_DAILY_ADJUSTED",
+                    "symbol": ticker,
+                    "outputsize": outputsize,
+                    "apikey": self.alpha_vantage_api_key,
+                },
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json().get("Time Series (Daily)", {})
+            records: List[Dict[str, Any]] = []
+            for date, values in payload.items():
+                records.append(
+                    {
+                        "date": date,
+                        "open": _safe_float(values.get("1. open")),
+                        "high": _safe_float(values.get("2. high")),
+                        "low": _safe_float(values.get("3. low")),
+                        "close": _safe_float(values.get("4. close")),
+                        "adjusted_close": _safe_float(values.get("5. adjusted close")),
+                        "volume": _safe_int(values.get("6. volume")),
+                        "source": "alpha_vantage",
+                    }
+                )
+            return sorted(records, key=lambda item: item["date"])
+        except Exception as exc:
+            logger.warning(f"Alpha Vantage history fetch failed for {ticker}: {exc}")
+            return []
+
+
+    #######################################
+    # add financial news fetching
+    ########################################
+    def fetch_newsapi_articles(
+        self, ticker: str, company_name: Optional[str] = None, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        if not self.news_api_key:
+            return []
+
+        query = f'"{ticker}"'
+        if company_name:
+            query = f'("{ticker}" OR "{company_name}")'
+
+        try:
+            response = requests.get(
+                "https://newsapi.org/v2/everything",
+                params={
+                    "q": query,
+                    "language": "en",
+                    "sortBy": "publishedAt",
+                    "pageSize": min(limit, 100),
+                    "apiKey": self.news_api_key,
+                },
+                timeout=20,
+            )
+            response.raise_for_status()
+            articles = []
+            for item in response.json().get("articles", []):
+                url = item.get("url")
+                articles.append(
+                    {
+                        "article_id": _hash_text(
+                            item.get("title", ""), url or "", item.get("publishedAt", "")
+                        ),
+                        "title": item.get("title"),
+                        "source": (item.get("source") or {}).get("name"),
+                        "date": item.get("publishedAt"),
+                        "published_at": item.get("publishedAt"),
+                        "url": url,
+                        "content": item.get("content") or item.get("description"),
+                        "summary": item.get("description"),
+                        "thumbnail": item.get("urlToImage"),
+                        "source_type": "newsapi",
+                    }
+                )
+            return articles
+        except Exception as exc:
+            logger.warning(f"NewsAPI fetch failed for {ticker}: {exc}")
+            return []
+
+
+    def fetch_yfinance_news(self, ticker: str, limit: int = 20) -> List[Dict[str, Any]]:
+        if not YFINANCE_AVAILABLE:
+            return []
+
+        try:
+            news = yf.Ticker(ticker).news or []
+            articles = []
+            for item in news[:limit]:
+                url = item.get("link")
+                published_time = item.get("providerPublishTime")
+                articles.append(
+                    {
+                        "article_id": _hash_text(
+                            item.get("title", ""), url or "", str(published_time or "")
+                        ),
+                        "title": item.get("title"),
+                        "source": item.get("publisher"),
+                        "date": (
+                            datetime.fromtimestamp(
+                                published_time, tz=timezone.utc
+                            ).isoformat()
+                            if published_time
+                            else None
+                        ),
+                        "published_at": (
+                            datetime.fromtimestamp(
+                                published_time, tz=timezone.utc
+                            ).isoformat()
+                            if published_time
+                            else None
+                        ),
+                        "url": url,
+                        "content": item.get("summary") or item.get("description"),
+                        "summary": item.get("summary") or item.get("description"),
+                        "thumbnail": (item.get("thumbnail") or {})
+                        .get("resolutions", [{}])[0]
+                        .get("url"),
+                        "source_type": "yfinance",
+                    }
+                )
+            return articles
+        except Exception as exc:
+            logger.warning(f"yFinance news fetch failed for {ticker}: {exc}")
+            return []
+
+
+    ###################################
+    #add multi-source data aggregation
+    ###################################
+    def build_quality_report(self, bundle: Dict[str, Any]) -> Dict[str, Any]:
+        historical_prices = bundle.get("historical_prices") or []
+        news_articles = bundle.get("news_articles") or []
+
+        if PANDAS_AVAILABLE:
+            price_frame = pd.DataFrame(historical_prices)
+            missing_counts = (
+                price_frame.isna().sum().to_dict() if not price_frame.empty else {}
+            )
+        else:
+            missing_counts = {}
+            for row in historical_prices:
+                for key, value in row.items():
+                    if value in (None, ""):
+                        missing_counts[key] = missing_counts.get(key, 0) + 1
+
+        return {
+            "record_counts": {
+                "historical_prices": len(historical_prices),
+                "news_articles": len(news_articles),
             },
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json().get("Time Series (Daily)", {})
-        records: List[Dict[str, Any]] = []
-        for date, values in payload.items():
-            records.append(
-                {
-                    "date": date,
-                    "open": _safe_float(values.get("1. open")),
-                    "high": _safe_float(values.get("2. high")),
-                    "low": _safe_float(values.get("3. low")),
-                    "close": _safe_float(values.get("4. close")),
-                    "adjusted_close": _safe_float(values.get("5. adjusted close")),
-                    "volume": _safe_int(values.get("6. volume")),
-                    "source": "alpha_vantage",
-                }
-            )
-        return sorted(records, key=lambda item: item["date"])
-    except Exception as exc:
-        logger.warning(f"Alpha Vantage history fetch failed for {ticker}: {exc}")
-        return []
-
-
-#######################################
-# add financial news fetching
-########################################
-def fetch_newsapi_articles(
-    self, ticker: str, company_name: Optional[str] = None, limit: int = 20
-) -> List[Dict[str, Any]]:
-    if not self.news_api_key:
-        return []
-
-    query = f'"{ticker}"'
-    if company_name:
-        query = f'("{ticker}" OR "{company_name}")'
-
-    try:
-        response = requests.get(
-            "https://newsapi.org/v2/everything",
-            params={
-                "q": query,
-                "language": "en",
-                "sortBy": "publishedAt",
-                "pageSize": min(limit, 100),
-                "apiKey": self.news_api_key,
-            },
-            timeout=20,
-        )
-        response.raise_for_status()
-        articles = []
-        for item in response.json().get("articles", []):
-            url = item.get("url")
-            articles.append(
-                {
-                    "article_id": _hash_text(
-                        item.get("title", ""), url or "", item.get("publishedAt", "")
-                    ),
-                    "title": item.get("title"),
-                    "source": (item.get("source") or {}).get("name"),
-                    "date": item.get("publishedAt"),
-                    "published_at": item.get("publishedAt"),
-                    "url": url,
-                    "content": item.get("content") or item.get("description"),
-                    "summary": item.get("description"),
-                    "thumbnail": item.get("urlToImage"),
-                    "source_type": "newsapi",
-                }
-            )
-        return articles
-    except Exception as exc:
-        logger.warning(f"NewsAPI fetch failed for {ticker}: {exc}")
-        return []
-
-
-def fetch_yfinance_news(self, ticker: str, limit: int = 20) -> List[Dict[str, Any]]:
-    if not YFINANCE_AVAILABLE:
-        return []
-
-    try:
-        news = yf.Ticker(ticker).news or []
-        articles = []
-        for item in news[:limit]:
-            url = item.get("link")
-            published_time = item.get("providerPublishTime")
-            articles.append(
-                {
-                    "article_id": _hash_text(
-                        item.get("title", ""), url or "", str(published_time or "")
-                    ),
-                    "title": item.get("title"),
-                    "source": item.get("publisher"),
-                    "date": (
-                        datetime.fromtimestamp(
-                            published_time, tz=timezone.utc
-                        ).isoformat()
-                        if published_time
-                        else None
-                    ),
-                    "published_at": (
-                        datetime.fromtimestamp(
-                            published_time, tz=timezone.utc
-                        ).isoformat()
-                        if published_time
-                        else None
-                    ),
-                    "url": url,
-                    "content": item.get("summary") or item.get("description"),
-                    "summary": item.get("summary") or item.get("description"),
-                    "thumbnail": (item.get("thumbnail") or {})
-                    .get("resolutions", [{}])[0]
-                    .get("url"),
-                    "source_type": "yfinance",
-                }
-            )
-        return articles
-    except Exception as exc:
-        logger.warning(f"yFinance news fetch failed for {ticker}: {exc}")
-        return []
-
-
-###################################
-#add multi-source data aggregation
-###################################
-def build_quality_report(self, bundle: Dict[str, Any]) -> Dict[str, Any]:
-    historical_prices = bundle.get("historical_prices") or []
-    news_articles = bundle.get("news_articles") or []
-
-    if PANDAS_AVAILABLE:
-        price_frame = pd.DataFrame(historical_prices)
-        missing_counts = (
-            price_frame.isna().sum().to_dict() if not price_frame.empty else {}
-        )
-    else:
-        missing_counts = {}
-        for row in historical_prices:
-            for key, value in row.items():
-                if value in (None, ""):
-                    missing_counts[key] = missing_counts.get(key, 0) + 1
-
-    return {
-        "record_counts": {
-            "historical_prices": len(historical_prices),
-            "news_articles": len(news_articles),
-        },
-        "missing_counts": missing_counts,
-        "sources_used": bundle.get("sources_used", []),
-        "generated_at": datetime.utcnow().isoformat(),
-    }
-
-
-def fetch_all(
-    self, ticker: str, history_period: str = "2y", news_limit: int = 20
-) -> Dict[str, Any]:
-    ticker = ticker.upper().strip()
-    logger.info(f"Fetching multi-source data for {ticker}")
-
-    yfinance_snapshot = self.fetch_yfinance_snapshot(ticker)
-    alpha_quote = self.fetch_alpha_vantage_quote(ticker)
-    alpha_overview = self.fetch_alpha_vantage_overview(ticker)
-    yfinance_fundamentals = self.fetch_yfinance_fundamentals(ticker)
-
-    historical_prices = self.fetch_yfinance_history(
-        ticker, period=history_period, interval="1d"
-    )
-    if len(historical_prices) < 30:
-        alpha_history = self.fetch_alpha_vantage_history(ticker, outputsize="full")
-        if alpha_history:
-            historical_prices = alpha_history
-
-    company_info = {}
-    company_info.update(yfinance_fundamentals.get("company_info", {}))
-    company_info.update(alpha_overview)
-    company_info.update(alpha_quote)
-    company_info.update(yfinance_snapshot)
-
-    financial_statements = yfinance_fundamentals.get("financial_statements", {})
-
-    news_articles = self.fetch_newsapi_articles(
-        ticker, company_name=company_info.get("name"), limit=news_limit
-    )
-    if not news_articles:
-        news_articles = self.fetch_yfinance_news(ticker, limit=news_limit)
-
-    sources_used = {
-        source
-        for source in [
-            yfinance_snapshot.get("source"),
-            alpha_quote.get("source"),
-            alpha_overview.get("source"),
-        ]
-        if isinstance(source, str) and source
-    }
-    sources_used.update(
-        {
-            article.get("source_type")
-            for article in news_articles
-            if isinstance(article.get("source_type"), str)
-            and article.get("source_type")
+            "missing_counts": missing_counts,
+            "sources_used": bundle.get("sources_used", []),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
-    )
 
-    bundle = {
-        "ticker": ticker,
-        "stock_data": {
-            **yfinance_snapshot,
-            **alpha_quote,
-        },
-        "historical_prices": historical_prices,
-        "company_info": company_info,
-        "financial_statements": financial_statements,
-        "news_articles": news_articles,
-        "sources_used": sorted(sources_used),
-    }
 
-    bundle["quality_report"] = self.build_quality_report(bundle)
-    return bundle
+    def fetch_all(
+        self, ticker: str, history_period: str = "2y", news_limit: int = 20
+    ) -> Dict[str, Any]:
+        ticker = ticker.upper().strip()
+        logger.info(f"Fetching multi-source data for {ticker}")
+
+        yfinance_snapshot = self.fetch_yfinance_snapshot(ticker)
+        alpha_quote = self.fetch_alpha_vantage_quote(ticker)
+        alpha_overview = self.fetch_alpha_vantage_overview(ticker)
+        yfinance_fundamentals = self.fetch_yfinance_fundamentals(ticker)
+
+        historical_prices = self.fetch_yfinance_history(
+            ticker, period=history_period, interval="1d"
+        )
+        if len(historical_prices) < 30:
+            alpha_history = self.fetch_alpha_vantage_history(ticker, outputsize="full")
+            if alpha_history:
+                historical_prices = alpha_history
+
+        company_info = {}
+        company_info.update(yfinance_fundamentals.get("company_info", {}))
+        company_info.update(alpha_overview)
+        company_info.update(alpha_quote)
+        company_info.update(yfinance_snapshot)
+
+        financial_statements = yfinance_fundamentals.get("financial_statements", {})
+
+        news_articles = self.fetch_newsapi_articles(
+            ticker, company_name=company_info.get("name"), limit=news_limit
+        )
+        if not news_articles:
+            news_articles = self.fetch_yfinance_news(ticker, limit=news_limit)
+
+        sources_used = {
+            source
+            for source in [
+                yfinance_snapshot.get("source"),
+                alpha_quote.get("source"),
+                alpha_overview.get("source"),
+            ]
+            if isinstance(source, str) and source
+        }
+        sources_used.update(
+            {
+                article.get("source_type")
+                for article in news_articles
+                if isinstance(article.get("source_type"), str)
+                and article.get("source_type")
+            }
+        )
+
+        bundle = {
+            "ticker": ticker,
+            "stock_data": {
+                **yfinance_snapshot,
+                **alpha_quote,
+            },
+            "historical_prices": historical_prices,
+            "company_info": company_info,
+            "financial_statements": financial_statements,
+            "news_articles": news_articles,
+            "sources_used": sorted(sources_used),
+        }
+
+        bundle["quality_report"] = self.build_quality_report(bundle)
+        return bundle
