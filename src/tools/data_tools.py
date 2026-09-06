@@ -133,4 +133,52 @@ def fetch_news_articles(ticker: str, limit: int = 10) -> Optional[List[Dict]]:
     except Exception as e: 
         logger.error(f"Error fetching news articles for {ticker}: {str(e)}") 
         return None 
+
+
+##########################################
+#Information Retrieval
+#########################################    
+def perform_ir_search(query: str, limit: int = 5) -> Optional[List[Dict]]: 
+    """ 
+    Performs Information Retrieval search for investment-related queries. 
+    This is a placeholder - integrate with your preferred IR system (e.g., 
+Elasticsearch, vector DB). 
      
+    Args: 
+        query: Search query 
+        limit: Maximum number of results 
+     
+    Returns: 
+        List of dictionaries containing search results or None if failed 
+    """ 
+    try: 
+        logger.info(f"Performing IR search for query: {query}") 
+        results = _VECTOR_STORE.search(query, limit=limit) 
+        if results: 
+            search_results = [ 
+                { 
+                    "query": query, 
+                    "title": item.get("metadata", {}).get("article_id"), 
+                    "snippet": item.get("document"), 
+                    "source": item.get("metadata", {}).get("source"), 
+                    "relevance_score": 1.0 / (1.0 + (item.get("distance") or 0.0)), 
+                } 
+                for item in results 
+            ] 
+        else: 
+            search_results = [ 
+                { 
+                    "query": query, 
+                    "title": f"Result 1 for {query}", 
+                    "snippet": f"Relevant information about {query}...", 
+                    "source": "investment_db", 
+                    "relevance_score": 0.95, 
+                } 
+            ] 
+ 
+        logger.info(f"IR search completed with {len(search_results)} results") 
+        return search_results 
+         
+    except Exception as e: 
+        logger.error(f"Error performing IR search for query {query}: {str(e)}") 
+        return None   
