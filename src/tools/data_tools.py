@@ -105,4 +105,32 @@ def fetch_financial_statements(ticker: str) -> Optional[Dict]:
          
     except Exception as e: 
         logger.error(f"Error fetching financial statements for {ticker}: {str(e)}") 
-        return None    
+        return None  
+     
+##########################################
+#Company & financial information
+######################################### 
+def fetch_news_articles(ticker: str, limit: int = 10) -> Optional[List[Dict]]: 
+    """ 
+    Fetches recent news articles for a ticker using yfinance. 
+     
+    Args: 
+        ticker: Stock ticker symbol 
+        limit: Maximum number of articles to fetch 
+     
+    Returns: 
+        List of dictionaries containing news articles or None if failed 
+    """ 
+    try: 
+        logger.info(f"Fetching news articles for {ticker}") 
+        company = fetch_company_info(ticker) or {} 
+        articles = _INGESTION.fetch_newsapi_articles(ticker, company_name=company.get("name"), limit=limit) 
+        if not articles: 
+            articles = _INGESTION.fetch_yfinance_news(ticker, limit=limit) 
+        logger.info(f"Successfully fetched {len(articles)} news articles for {ticker}") 
+        return articles 
+         
+    except Exception as e: 
+        logger.error(f"Error fetching news articles for {ticker}: {str(e)}") 
+        return None 
+     
