@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import json
+import re
+from typing import Optional
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -25,6 +27,67 @@ except ImportError:
         "google-generativeai is not available. "
         "Falling back to heuristic recommendations."
     )
+
+def _safe_json_loads(text: str) -> Dict[str, Any]:
+    """
+    Safely parse JSON returned by Gemini.
+
+    Handles responses wrapped in Markdown code fences.
+    """
+
+    if not text:
+        return {}
+
+    cleaned = text.strip()
+
+    cleaned = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    )
+
+    cleaned = re.sub(
+        r"\s*```$",
+        "",
+        cleaned
+    )
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start:end + 1]
+
+    try:
+        return json.loads(cleaned)
+
+    except Exception:
+        return {}
+
+
+def _normalize_recommendation(
+    value: Optional[str]
+) -> str:
+    """
+    Normalize Gemini recommendation to BUY, SELL, or HOLD.
+    """
+
+    if not value:
+        return "HOLD"
+
+    value = value.strip().upper()
+
+    if value in {"BUY", "SELL", "HOLD"}:
+        return value
+
+    if "BUY" in value:
+        return "BUY"
+
+    if "SELL" in value:
+        return "SELL"
+
+    return "HOLD"
 
 
 @dataclass
@@ -140,3 +203,115 @@ class GeminiRecommendationEngine:
         "Be strict, transparent, and conservative "
         "when confidence is weak."
     )
+
+    def generate(
+    self,
+    payload: Dict[str, Any]
+) -> Dict[str, Any]:
+
+    model = self._build_model()
+
+    if model is None:
+        return {}
+
+    prompt = self.build_prompt(payload)
+
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_output_tokens,
+            },
+        )
+
+        raw_text = getattr(
+            response,
+            "text",
+            ""
+        ) or ""
+
+        parsed = _safe_json_loads(raw_text)
+
+        recommendation = _normalize_recommendation(
+            parsed.get("recommendation")
+        )
+
+        confidence = parsed.get(
+            "confidence",
+            0.5
+        )
+
+        try:
+            confidence = float(confidence)
+
+        except Exception:
+            confidence = 0.5
+
+        confidence = max(
+            0.0,
+            min(1.0, confidence)
+        )
+
+        reasoning = parsed.get(
+            "reasoning"
+        ) or []
+
+        if isinstance(reasoning, str):
+            reasoning = [reasoning]
+
+        reasoning = [
+            str(item)
+            for item in reasoning
+            if str(item).strip()
+        ]
+
+        decision_factors = (
+            parsed.get("decision_factors")
+            or []
+        )
+
+        if not isinstance(
+            decision_factors,
+            list
+        ):
+            decision_factors = []
+
+        return {
+            "recommendation": recommendation,
+            "confidence": round(
+                confidence,
+                2
+            ),
+            "summary": (
+                str(
+                    parsed.get("summary")
+                    or ""
+                ).strip()
+                or "Gemini synthesized the available evidence."
+            ),
+            "reasoning": (
+                reasoning
+                or [
+                    "Gemini returned no detailed reasoning; "
+                    "using summary only."
+                ]
+            ),
+            "decision_factors": decision_factors,
+            "raw_response": raw_text,
+            "source": "gemini",
+        }
+
+    except Exception as exc:
+        logger.warning(
+            f"Gemini recommendation generation failed: {exc}"
+        )
+
+        return {}
+
+
+
+
+
+
+    
