@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import json
 import re
+from typing import List
 from typing import Optional
 from dataclasses import dataclass
 from typing import Any, Dict
@@ -89,6 +90,249 @@ def _normalize_recommendation(
 
     return "HOLD"
 
+
+def _heuristic_synthesis(
+    payload: Dict[str, Any]
+) -> Dict[str, Any]:
+
+    sentiment = payload.get(
+        "sentiment_score"
+    )
+
+    rsi = (
+        (payload.get("technical_indicators") or {})
+        .get("RSI")
+    )
+
+    sharpe = (
+        (payload.get("risk_metrics") or {})
+        .get("Sharpe_ratio")
+    )
+
+    forecast = (
+        (payload.get("price_forecast") or {})
+        .get("forecast_7d")
+    )
+
+    current = (
+        (payload.get("price_forecast") or {})
+        .get("current_price")
+    )
+
+    pe = (
+        (payload.get("fundamental_analysis") or {})
+        .get("pe_analysis", {})
+        .get("valuation")
+    )
+
+    score = 0
+
+    rationale: List[str] = []
+
+    # Sentiment
+    if sentiment is not None:
+
+        if sentiment > 0.25:
+            score += 1
+
+            rationale.append(
+                f"News sentiment is positive at "
+                f"{sentiment:.2f}."
+            )
+
+        elif sentiment < -0.25:
+            score -= 1
+
+            rationale.append(
+                f"News sentiment is negative at "
+                f"{sentiment:.2f}."
+            )
+
+        else:
+            rationale.append(
+                f"News sentiment is neutral at "
+                f"{sentiment:.2f}."
+            )
+
+    # RSI
+    if rsi is not None:
+
+        if rsi < 30:
+            score += 1
+
+            rationale.append(
+                f"RSI at {rsi:.1f} suggests "
+                "oversold conditions."
+            )
+
+        elif rsi > 70:
+            score -= 1
+
+            rationale.append(
+                f"RSI at {rsi:.1f} suggests "
+                "overbought conditions."
+            )
+
+        else:
+            rationale.append(
+                f"RSI at {rsi:.1f} is in a "
+                "neutral zone."
+            )
+
+    # Sharpe ratio
+    if sharpe is not None:
+
+        if sharpe > 1.0:
+            score += 1
+
+            rationale.append(
+                f"Sharpe ratio of {sharpe:.2f} "
+                "indicates favorable "
+                "risk-adjusted returns."
+            )
+
+        elif sharpe < 0.0:
+            score -= 1
+
+            rationale.append(
+                f"Sharpe ratio of {sharpe:.2f} "
+                "indicates weak "
+                "risk-adjusted returns."
+            )
+
+    # Price forecast
+    if forecast is not None and current:
+
+        upside = (
+            (forecast - current)
+            / current
+        ) * 100
+
+        if upside > 5:
+            score += 1
+
+            rationale.append(
+                f"7-day forecast implies "
+                f"{upside:.1f}% upside."
+            )
+
+        elif upside < -5:
+            score -= 1
+
+            rationale.append(
+                f"7-day forecast implies "
+                f"{upside:.1f}% downside."
+            )
+
+    # Fundamental valuation
+    if isinstance(pe, str):
+
+        if pe == "Undervalued":
+            score += 1
+
+            rationale.append(
+                "Fundamentals suggest the "
+                "stock looks undervalued."
+            )
+
+        elif pe == "Overvalued":
+            score -= 1
+
+            rationale.append(
+                "Fundamentals suggest the "
+                "stock looks overvalued."
+            )
+
+    # Recommendation
+    if score >= 2:
+        recommendation = "BUY"
+
+    elif score <= -2:
+        recommendation = "SELL"
+
+    else:
+        recommendation = "HOLD"
+
+    confidence = min(
+        0.95,
+        0.45 + (abs(score) * 0.15)
+    )
+
+    if not rationale:
+        rationale.append(
+            "Insufficient strong signals for "
+            "a high-conviction decision."
+        )
+
+    decision_factors = [
+        {
+            "signal": "sentiment",
+            "impact": (
+                "positive"
+                if sentiment is not None
+                and sentiment > 0.25
+                else "negative"
+                if sentiment is not None
+                and sentiment < -0.25
+                else "neutral"
+            ),
+            "evidence": (
+                f"{sentiment:.2f}"
+                if sentiment is not None
+                else "N/A"
+            ),
+        },
+        {
+            "signal": "technical",
+            "impact": (
+                "bullish"
+                if rsi is not None
+                and rsi < 30
+                else "bearish"
+                if rsi is not None
+                and rsi > 70
+                else "neutral"
+            ),
+            "evidence": (
+                f"RSI={rsi:.1f}"
+                if rsi is not None
+                else "N/A"
+            ),
+        },
+        {
+            "signal": "risk",
+            "impact": (
+                "supportive"
+                if sharpe is not None
+                and sharpe > 1.0
+                else "cautionary"
+                if sharpe is not None
+                and sharpe < 0.0
+                else "neutral"
+            ),
+            "evidence": (
+                f"Sharpe={sharpe:.2f}"
+                if sharpe is not None
+                else "N/A"
+            ),
+        },
+    ]
+
+    return {
+        "recommendation": recommendation,
+        "confidence": round(
+            confidence,
+            2
+        ),
+        "reasoning": rationale,
+        "decision_factors": decision_factors,
+        "summary": (
+            "Heuristic synthesis used because "
+            "Gemini was unavailable."
+        ),
+        "raw_response": None,
+        "source": "heuristic",
+    }
 
 @dataclass
 class GeminiRecommendationEngine:
@@ -212,7 +456,7 @@ class GeminiRecommendationEngine:
     model = self._build_model()
 
     if model is None:
-        return {}
+    return _heuristic_synthesis(payload)
 
     prompt = self.build_prompt(payload)
 
@@ -303,11 +547,11 @@ class GeminiRecommendationEngine:
         }
 
     except Exception as exc:
-        logger.warning(
-            f"Gemini recommendation generation failed: {exc}"
-        )
+    logger.warning(
+        f"Gemini recommendation generation failed: {exc}"
+    )
 
-        return {}
+    return _heuristic_synthesis(payload)
 
 
 
