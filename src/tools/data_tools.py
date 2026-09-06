@@ -181,4 +181,34 @@ Elasticsearch, vector DB).
          
     except Exception as e: 
         logger.error(f"Error performing IR search for query {query}: {str(e)}") 
-        return None   
+        return None  
+
+##########################################
+#Complete data pipeline
+#########################################
+def fetch_all_data(ticker: str) -> Dict[str, Any]: 
+    """ 
+    Fetches all available data for a ticker. 
+     
+    Args: 
+        ticker: Stock ticker symbol 
+     
+    Returns: 
+        Dictionary containing all fetched data 
+    """ 
+    logger.info(f"Fetching all data for {ticker}") 
+     
+    bundle = _INGESTION.fetch_all(ticker) 
+    data = { 
+        'ticker': ticker, 
+        'stock_data': bundle.get('stock_data'), 
+        'historical_prices': bundle.get('historical_prices'), 
+        'company_info': bundle.get('company_info'), 
+        'financial_statements': bundle.get('financial_statements'), 
+        'news_articles': bundle.get('news_articles'), 
+        'search_results': perform_ir_search(f"{ticker} financial analysis"), 
+        'quality_report': bundle.get('quality_report') 
+    } 
+     
+    logger.info(f"Completed fetching all data for {ticker}") 
+    return data         
