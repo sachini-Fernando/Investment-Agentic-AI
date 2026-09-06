@@ -122,46 +122,44 @@ class MarketDataIngestion:
          except Exception as exc: 
              logger.warning(f"yFinance quote fetch failed for {ticker}: {exc}") 
              return {} 
+
+##########################
+# yFinance history + fundamentals
+########################## 
+     def fetch_yfinance_history(self, ticker: str, period: str = "2y", interval: str = "1d") -> List[Dict[str, Any]]: 
+         if not YFINANCE_AVAILABLE: 
+             return [] 
  
-#     def fetch_yfinance_history(self, ticker: str, period: str = "2y", 
-# interval: str = "1d") -> List[Dict[str, Any]]: 
-#         if not YFINANCE_AVAILABLE: 
-#             return [] 
+         try: 
+             hist = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False) 
+             if hist.empty: 
+                 return [] 
  
-#         try: 
-#             hist = yf.Ticker(ticker).history(period=period, interval=interval, 
-# auto_adjust=False) 
-#             if hist.empty: 
-#                 return [] 
+             hist = _clean_price_frame(hist) 
+             if "adj close" not in hist.columns and "close" in hist.columns: 
+                 hist["adj close"] = hist["close"] 
  
-#             hist = _clean_price_frame(hist) 
-#             if "adj close" not in hist.columns and "close" in hist.columns: 
-#                 hist["adj close"] = hist["close"] 
+             records: List[Dict[str, Any]] = [] 
+             for index, row in hist.reset_index().iterrows(): 
+                 date_value = row.get("Date") or row.get("Datetime") or row.get("index") 
+                 if pd.isna(date_value): 
+                     continue 
  
-#             records: List[Dict[str, Any]] = [] 
-#             for index, row in hist.reset_index().iterrows(): 
-#                 date_value = row.get("Date") or row.get("Datetime") or 
-# row.get("index") 
-#                 if pd.isna(date_value): 
-#                     continue 
- 
-#                 records.append({ 
-#                     "date": 
-# pd.Timestamp(date_value).to_pydatetime().isoformat(), 
-#                     "open": _safe_float(row.get("open")), 
-#                     "high": _safe_float(row.get("high")), 
-#                     "low": _safe_float(row.get("low")), 
-#                     "close": _safe_float(row.get("close")), 
-#                     "volume": _safe_int(row.get("volume")), 
-#                       "adj_close": _safe_float(row.get("adj close") or 
-# row.get("adj_close") or row.get("close")), 
-#                     "source": "yfinance", 
-#                 }) 
-#             return records 
-#         except Exception as exc: 
-#             logger.warning(f"yFinance history fetch failed for {ticker}: 
-# {exc}") 
-#             return [] 
+                 records.append({ 
+                     "date": pd.Timestamp(date_value).to_pydatetime().isoformat(), 
+                     "open": _safe_float(row.get("open")), 
+                     "high": _safe_float(row.get("high")), 
+                     "low": _safe_float(row.get("low")), 
+                     "close": _safe_float(row.get("close")), 
+                     "volume": _safe_int(row.get("volume")), 
+                       "adj_close": _safe_float(row.get("adj close") or 
+ row.get("adj_close") or row.get("close")), 
+                     "source": "yfinance", 
+                 }) 
+             return records 
+         except Exception as exc: 
+             logger.warning(f"yFinance history fetch failed for {ticker}:{exc}") 
+             return [] 
  
 #     def fetch_yfinance_fundamentals(self, ticker: str) -> Dict[str, Any]: 
 #         if not YFINANCE_AVAILABLE: 
