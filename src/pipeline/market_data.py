@@ -506,12 +506,16 @@ def fetch_yfinance_news(self, ticker: str, limit: int = 20) -> List[Dict[str, An
                     "title": item.get("title"),
                     "source": item.get("publisher"),
                     "date": (
-                        datetime.fromtimestamp(published_time, tz=timezone.utc).isoformat()
+                        datetime.fromtimestamp(
+                            published_time, tz=timezone.utc
+                        ).isoformat()
                         if published_time
                         else None
                     ),
                     "published_at": (
-                        datetime.fromtimestamp(published_time, tz=timezone.utc).isoformat()
+                        datetime.fromtimestamp(
+                            published_time, tz=timezone.utc
+                        ).isoformat()
                         if published_time
                         else None
                     ),
@@ -528,3 +532,101 @@ def fetch_yfinance_news(self, ticker: str, limit: int = 20) -> List[Dict[str, An
     except Exception as exc:
         logger.warning(f"yFinance news fetch failed for {ticker}: {exc}")
         return []
+
+
+###################################
+#add multi-source data aggregation
+###################################
+def build_quality_report(self, bundle: Dict[str, Any]) -> Dict[str, Any]:
+    historical_prices = bundle.get("historical_prices") or []
+    news_articles = bundle.get("news_articles") or []
+
+    if PANDAS_AVAILABLE:
+        price_frame = pd.DataFrame(historical_prices)
+        missing_counts = (
+            price_frame.isna().sum().to_dict() if not price_frame.empty else {}
+        )
+    else:
+        missing_counts = {}
+        for row in historical_prices:
+            for key, value in row.items():
+                if value in (None, ""):
+                    missing_counts[key] = missing_counts.get(key, 0) + 1
+
+    return {
+        "record_counts": {
+            "historical_prices": len(historical_prices),
+            "news_articles": len(news_articles),
+        },
+        "missing_counts": missing_counts,
+        "sources_used": bundle.get("sources_used", []),
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
+def fetch_all(
+    self, ticker: str, history_period: str = "2y", news_limit: int = 20
+) -> Dict[str, Any]:
+    ticker = ticker.upper().strip()
+    logger.info(f"Fetching multi-source data for {ticker}")
+
+    yfinance_snapshot = self.fetch_yfinance_snapshot(ticker)
+    alpha_quote = self.fetch_alpha_vantage_quote(ticker)
+    alpha_overview = self.fetch_alpha_vantage_overview(ticker)
+    yfinance_fundamentals = self.fetch_yfinance_fundamentals(ticker)
+
+    historical_prices = self.fetch_yfinance_history(
+        ticker, period=history_period, interval="1d"
+    )
+    if len(historical_prices) < 30:
+        alpha_history = self.fetch_alpha_vantage_history(ticker, outputsize="full")
+        if alpha_history:
+            historical_prices = alpha_history
+
+    company_info = {}
+    company_info.update(yfinance_fundamentals.get("company_info", {}))
+    company_info.update(alpha_overview)
+    company_info.update(alpha_quote)
+    company_info.update(yfinance_snapshot)
+
+    financial_statements = yfinance_fundamentals.get("financial_statements", {})
+
+    news_articles = self.fetch_newsapi_articles(
+        ticker, company_name=company_info.get("name"), limit=news_limit
+    )
+    if not news_articles:
+        news_articles = self.fetch_yfinance_news(ticker, limit=news_limit)
+
+    sources_used = {
+        source
+        for source in [
+            yfinance_snapshot.get("source"),
+            alpha_quote.get("source"),
+            alpha_overview.get("source"),
+        ]
+        if isinstance(source, str) and source
+    }
+    sources_used.update(
+        {
+            article.get("source_type")
+            for article in news_articles
+            if isinstance(article.get("source_type"), str)
+            and article.get("source_type")
+        }
+    )
+
+    bundle = {
+        "ticker": ticker,
+        "stock_data": {
+            **yfinance_snapshot,
+            **alpha_quote,
+        },
+        "historical_prices": historical_prices,
+        "company_info": company_info,
+        "financial_statements": financial_statements,
+        "news_articles": news_articles,
+        "sources_used": sorted(sources_used),
+    }
+
+    bundle["quality_report"] = self.build_quality_report(bundle)
+    return bundle
