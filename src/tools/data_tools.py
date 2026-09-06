@@ -60,3 +60,49 @@ def fetch_historical_prices(ticker: str, period: str = "1y", interval: str =
     except Exception as e: 
         logger.error(f"Error fetching historical prices for {ticker}: {str(e)}") 
         return None 
+
+##########################################
+#Company & financial information
+######################################### 
+def fetch_company_info(ticker: str) -> Optional[Dict]: 
+    """ 
+    Fetches detailed company information using yfinance. 
+     
+    Args: 
+        ticker: Stock ticker symbol 
+     
+    Returns: 
+        Dictionary containing company information or None if failed 
+    """ 
+    try: 
+        logger.info(f"Fetching company info for {ticker}") 
+        bundle = _INGESTION.fetch_yfinance_fundamentals(ticker) 
+        company_info = bundle.get("company_info", {}) 
+        company_info.update(_INGESTION.fetch_alpha_vantage_overview(ticker)) 
+        logger.info(f"Successfully fetched company info for {ticker}") 
+        return company_info 
+         
+    except Exception as e: 
+        logger.error(f"Error fetching company info for {ticker}: {str(e)}") 
+        return None 
+ 
+def fetch_financial_statements(ticker: str) -> Optional[Dict]: 
+    """ 
+    Fetches financial statements (income statement, balance sheet, cash flow). 
+     
+    Args: 
+        ticker: Stock ticker symbol 
+     
+    Returns: 
+        Dictionary containing financial statements or None if failed 
+    """ 
+    try: 
+        logger.info(f"Fetching financial statements for {ticker}") 
+        bundle = _INGESTION.fetch_yfinance_fundamentals(ticker) 
+        financial_data = bundle.get("financial_statements") 
+        logger.info(f"Successfully fetched financial statements for {ticker}") 
+        return financial_data 
+         
+    except Exception as e: 
+        logger.error(f"Error fetching financial statements for {ticker}: {str(e)}") 
+        return None    
