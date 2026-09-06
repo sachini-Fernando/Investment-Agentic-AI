@@ -307,3 +307,93 @@ def run_investment_analysis(
     logger.info(f"Investment analysis completed for {ticker}")
 
     return result
+
+
+#############################################
+#Analysis Summary + Testing
+#############################################
+def print_analysis_summary(state: InvestmentState): 
+    """ 
+    Prints a summary of the investment analysis results. 
+     
+    Args: 
+        state: The final state from the investment analysis 
+    """ 
+    print("\n" + "="*80) 
+    print("INVESTMENT ANALYSIS SUMMARY") 
+    print("="*80) 
+    print(f"Ticker: {state['ticker']}") 
+    print(f"User Query: {state['user_query'] or 'None'}") 
+    print("\n" + "-"*80) 
+     
+    # Data Acquisition Summary 
+    print("\n[DATA ACQUISITION & IR AGENT]") 
+    if state['stock_data']: 
+        print(f"Current Price: ${state['stock_data'].get('current_price', 'N/A')}") 
+        print(f"Market Cap: ${state['stock_data'].get('market_cap', 'N/A'):,}") 
+    if state['company_info']: 
+        print(f"Sector: {state['company_info'].get('sector', 'N/A')}") 
+        print(f"P/E Ratio: {state['company_info'].get('pe_ratio', 'N/A')}") 
+    print(f"News Articles Found: {len(state['news_articles']) if state['news_articles'] else 0}") 
+     
+    # Sentiment Analysis Summary 
+    print("\n[SENTIMENT & NLP ANALYSIS AGENT]") 
+    if state['sentiment_score'] is not None: 
+        print(f"Overall Sentiment: {state['sentiment_score']:.2f}") 
+        print(f"Sentiment Confidence: {state['sentiment_confidence']:.2f}") 
+    if state['news_summary']: 
+        print(f"News Summary: {state['news_summary']}") 
+     
+    # Financial Reasoning Summary 
+    print("\n[FINANCIAL REASONING & LLM AGENT]") 
+    if state.get('llm_recommendation'): 
+        print(f"Gemini Recommendation: {state['llm_recommendation']}") 
+        print(f"Gemini Confidence: {state.get('llm_confidence', 0.0):.2f}") 
+    if state['preliminary_recommendation']: 
+        print(f"Preliminary Recommendation: {state['preliminary_recommendation']}") 
+        print(f"Confidence Score: {state['confidence_score']:.2f}") 
+    if state.get('llm_summary'): 
+        print(f"LLM Summary: {state['llm_summary']}") 
+    if state['price_forecast']: 
+        print(f"7-Day Forecast: ${state['price_forecast'].get('forecast_7d', 'N/A')}") 
+        print(f"30-Day Forecast: ${state['price_forecast'].get('forecast_30d', 'N/A')}") 
+     
+    # Risk Assessment Summary 
+    print("\n[RISK ASSESSMENT & VALIDATION AGENT]") 
+    if state['risk_adjusted_recommendation']: 
+        print(f"Final Recommendation: {state['risk_adjusted_recommendation']}") 
+        print(f"Risk Level: {state['risk_level']}") 
+        print(f"Validation Status: {state['validation_status']}") 
+    if state.get('final_recommendation'): 
+        print(f"Final Recommendation Alias: {state['final_recommendation']}") 
+    if state['position_sizing']: 
+        print(f"Recommended Allocation: {state['position_sizing'].get('recommended_allocation', 'N/A')*100:.1f}%") 
+    if state['stop_loss']: 
+        print(f"Stop Loss: ${state['stop_loss']}") 
+    if state['take_profit']: 
+        print(f"Take Profit: ${state['take_profit']}") 
+     
+    # Metadata 
+    print("\n[METADATA]") 
+    if state['agent_execution_order']: 
+        print(f"Agent Execution Order: {' -> '.join(state['agent_execution_order'])}") 
+    if state['errors']: 
+        print(f"Errors: {len(state['errors'])}") 
+        for error in state['errors']: 
+            print(f"  - {error}") 
+     
+    print("\n" + "="*80 + "\n") 
+ 
+# ============================================================================ 
+# MAIN EXECUTION (for testing) 
+# ============================================================================ 
+if __name__ == "__main__": 
+    # Test the workflow with a sample ticker 
+    ticker = "AAPL" 
+    logger.info(f"Testing investment analysis workflow for {ticker}") 
+     
+    # Run the analysis 
+    result = run_investment_analysis(ticker, user_query="Should I buy this stock?") 
+     
+    # Print the summary 
+    print_analysis_summary(result)
