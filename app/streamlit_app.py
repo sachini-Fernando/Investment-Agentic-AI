@@ -5,6 +5,7 @@ Provides an interactive dashboard for investment analysis.
 
 import sys
 import base64
+import os
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -17,6 +18,7 @@ sys.path.insert(0, str(project_root))
 
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
+from src.pipeline.local_history import load_local_history, save_analysis_summary  # noqa: E402
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -145,17 +147,60 @@ def render_sidebar():
         unsafe_allow_html=True,
     )
 
-    ticker = st.sidebar.text_input(
-        "🔎 Stock Ticker",
-        value="AAPL",
-        help="Enter stock ticker symbol (e.g., AAPL, GOOGL, MSFT)",
-    ).upper()
+    ticker_options = {
+        "AAPL — Apple": "AAPL",
+        "MSFT — Microsoft": "MSFT",
+        "NVDA — NVIDIA": "NVDA",
+        "GOOGL — Alphabet": "GOOGL",
+        "AMZN — Amazon": "AMZN",
+        "META — Meta Platforms": "META",
+        "TSLA — Tesla": "TSLA",
+        "JPM — JPMorgan Chase": "JPM",
+        "V — Visa": "V",
+        "JNJ — Johnson & Johnson": "JNJ",
+        "SPY — S&P 500 ETF": "SPY",
+        "Custom ticker…": "CUSTOM",
+    }
+    selected_ticker = st.sidebar.selectbox(
+        "🔎 Select a ticker",
+        options=list(ticker_options),
+        help="Choose a common investment or select Custom ticker to enter another symbol.",
+    )
+    if ticker_options[selected_ticker] == "CUSTOM":
+        ticker = st.sidebar.text_input(
+            "Custom ticker symbol",
+            placeholder="e.g., NFLX, BABA, CSE.N0000",
+            help="Enter the exchange ticker used by Yahoo Finance.",
+        ).upper().strip()
+    else:
+        ticker = ticker_options[selected_ticker]
+        st.sidebar.caption(f"Selected: **{ticker}**")
 
     user_query = st.sidebar.text_area(
         "💬 Your Question",
         placeholder="e.g., Should I buy this stock?",
         help="Ask a specific question about the stock",
     )
+
+    with st.sidebar.expander("🎯 Your portfolio plan", expanded=True):
+        st.caption("A stock idea is more useful when it fits your goal, time horizon, and risk comfort.")
+        goal = st.selectbox("Primary goal", ["Long-term growth", "Income", "Capital preservation", "Balanced growth and income"])
+        risk_profile = st.select_slider("Risk comfort", options=["Conservative", "Balanced", "Growth", "Aggressive"], value="Balanced")
+        horizon_years = st.slider("Investment horizon (years)", 1, 30, 10)
+        portfolio_value = st.number_input("Portfolio value (USD)", min_value=0.0, value=100000.0, step=1000.0)
+        existing_ticker_weight = st.slider("Current weight in this stock", 0, 100, 0) / 100
+        proposed_weight = st.slider("Planned additional weight", 0, 30, 5) / 100
+        liquidity_need = st.selectbox("Need this money soon?", ["Low", "Medium", "High"])
+
+    investor_profile = {
+        "goal": goal,
+        "risk_profile": risk_profile,
+        "horizon_years": horizon_years,
+        "portfolio_value": portfolio_value,
+        "existing_ticker_weight": existing_ticker_weight,
+        "proposed_weight": proposed_weight,
+        "liquidity_need": liquidity_need,
+    }
 
     with st.sidebar.expander("⚙️ Advanced Options"):
         use_conditional = st.checkbox(
@@ -164,15 +209,19 @@ def render_sidebar():
             help="Enable dynamic agent routing",
         )
         use_mongodb = st.checkbox(
-            "Use MongoDB Persistence",
+            "Save full workflow history to MongoDB",
             value=False,
-            help="Enable state persistence with MongoDB",
+            help="Optional. MongoDB requires a configured connection and a Thread ID for each saved workflow.",
         )
-        thread_id = st.text_input(
-            "Thread ID",
-            value="",
-            help="Required if MongoDB is enabled",
-        )
+        thread_id = ""
+        if use_mongodb:
+            thread_id = st.text_input(
+                "Thread ID",
+                value="",
+                help="Choose a unique label for this MongoDB workflow, for example: aapl-review-september.",
+            )
+            if not os.getenv("MONGODB_URI"):
+                st.warning("MongoDB needs MONGODB_URI in your .env file. Local history still saves automatically without it.")
 
     analyze_button = st.sidebar.button(
         "🚀 Analyze Stock",
@@ -180,7 +229,39 @@ def render_sidebar():
         use_container_width=True,
     )
 
-    return ticker, user_query, use_conditional, use_mongodb, thread_id, analyze_button
+    return ticker, user_query, use_conditional, use_mongodb, thread_id, investor_profile, analyze_button
+
+
+def render_portfolio_fit(state):
+    """Show how a single-stock view fits a diversified portfolio plan."""
+    section_title("target", "Portfolio Fit & Rebalancing", "green", "Goal-based allocation, diversification, and concentration checks")
+    insights = state.get("portfolio_insights")
+    if not insights:
+        st.info("Portfolio-fit guidance will appear after your analysis is complete.")
+        return
+
+    allocation = insights["target_allocation"]
+    chart = go.Figure(data=[go.Pie(
+        labels=list(allocation), values=list(allocation.values()), hole=0.58,
+        marker={"colors": ["#40d1c8", "#7ca7ff", "#f5b84b"]}, textinfo="label+percent",
+    )])
+    chart.update_layout(height=300, margin=dict(l=15, r=15, t=15, b=15), paper_bgcolor="rgba(0,0,0,0)", font_color="#edf3fb")
+    left, right = st.columns(2)
+    with left:
+        st.plotly_chart(chart, use_container_width=True)
+    with right:
+        st.metric("Single-stock weight after this idea", f"{insights['resulting_ticker_weight']:.0%}")
+        st.metric("Concentration check", insights["concentration_status"])
+        st.write(f"**Goal:** {insights['goal']}  ")
+        st.write(f"**Risk comfort:** {insights['risk_profile']}  ")
+        st.write(f"**Horizon:** {insights['horizon_years']} years")
+        st.info(f"**Rebalance cue:** {insights['rebalance_action']}")
+    if insights["alerts"]:
+        for alert in insights["alerts"]:
+            st.warning(alert)
+    else:
+        st.success("This proposed weight is within the app's 10% single-company educational guardrail.")
+    st.caption("Educational planning aid only. Consider your full finances, taxes, and professional advice before acting.")
 
 
 def render_stock_data(state):
@@ -508,20 +589,11 @@ def render_execution_info(state):
 
 
 def load_analysis_history(ticker=None, limit=10):
-    """Loads recent analysis runs from MongoDB."""
-    store = MongoPipelineStore()
-    database = store.db
-    if not store.available or database is None:
-        return []
-
-    query = {}
+    """Loads automatic on-device history; no database configuration required."""
+    history = load_local_history()
     if ticker:
-        query["ticker"] = ticker.upper()
-
-    cursor = (
-        database.analysis_runs.find(query).sort("updated_at", -1).limit(limit)
-    )
-    return list(cursor)
+        history = [item for item in history if item.get("ticker") == ticker.upper()]
+    return history[:limit]
 
 
 def render_recent_analyses_summary(current_state=None):
@@ -673,12 +745,61 @@ def render_analysis_history(ticker):
                     st.warning(factor)
 
 
+def render_beginner_recent_analyses():
+    """Show automatic saved history with first-time-investor wording."""
+    section_title("cpu", "Your Recent Analyses", "teal", "Saved automatically on this computer")
+    recent = load_analysis_history(limit=3)
+    if not recent:
+        st.info("Your first completed analysis will be saved here automatically. Choose a ticker and select Analyze Stock to begin.")
+        return
+
+    latest = recent[0]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Saved analyses", len(recent))
+    col2.metric("Latest ticker", latest.get("ticker", "N/A"))
+    col3.metric("Latest view", latest.get("recommendation", "N/A"))
+    confidence = latest.get("confidence")
+    col4.metric("Confidence", f"{confidence:.0%}" if confidence is not None else "Not available")
+    st.caption("Saved records keep only your question, the latest view, confidence, summary, and up to three risk reminders. Signals are research, not trading instructions.")
+
+
+def render_beginner_history():
+    """Provide a compact, no-database history view for new investors."""
+    section_title("clock", "Your Past Analyses", "amber", "Compare your research without an account or database")
+    all_history = load_analysis_history(limit=50)
+    if not all_history:
+        st.info("No saved analyses yet. Complete an analysis and it will appear here automatically.")
+        return
+
+    tickers = sorted({item.get("ticker") for item in all_history if item.get("ticker")})
+    selection = st.selectbox("Show analyses for", ["All tickers"] + tickers, key="beginner_history_ticker")
+    history = all_history if selection == "All tickers" else load_analysis_history(selection, 10)
+    st.caption("New analyses replace older entries for the same ticker, keeping this list clear and current.")
+    for item in history:
+        date = item.get("saved_at", "").replace("T", " ")[:16]
+        with st.expander(f"{item.get('ticker', 'N/A')} | {item.get('recommendation', 'N/A')} | {date} UTC"):
+            col1, col2, col3 = st.columns(3)
+            col1.write(f"**Latest view:** {item.get('recommendation', 'N/A')}")
+            col1.write(f"**Risk level:** {item.get('risk_level', 'N/A')}")
+            confidence = item.get("confidence")
+            col2.write(f"**Confidence:** {confidence:.0%}" if confidence is not None else "**Confidence:** Not available")
+            col2.write(f"**Your question:** {item.get('question', 'General stock review')}")
+            col3.write(f"**Saved:** {date} UTC")
+            col3.write("**Stored on:** this computer")
+            st.write("**What this means:**")
+            st.write(item.get("summary", "No summary was available."))
+            if item.get("risk_factors"):
+                st.write("**Things to keep in mind:**")
+                for factor in item["risk_factors"]:
+                    st.warning(factor)
+
+
 def main():
     """Main Streamlit application."""
     load_theme()
     render_header()
 
-    ticker, user_query, use_conditional, use_mongodb, thread_id, analyze_button = render_sidebar()
+    ticker, user_query, use_conditional, use_mongodb, thread_id, investor_profile, analyze_button = render_sidebar()
 
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
@@ -688,41 +809,51 @@ def main():
     if analyze_button and ticker:
         with st.spinner(f"Analyzing {ticker}... This may take a moment."):
             try:
-                if use_mongodb and not thread_id:
-                    st.error("Thread ID is required when MongoDB is enabled")
-                    st.stop()
+                if use_mongodb and not os.getenv("MONGODB_URI"):
+                    st.warning("MongoDB is not configured, so this analysis will be saved only in automatic local history.")
+                    use_mongodb = False
+                if use_mongodb and not thread_id.strip():
+                    st.warning("Enter a Thread ID to save this workflow to MongoDB. This analysis will still be saved in automatic local history.")
+                    use_mongodb = False
 
                 result = run_investment_analysis(
                     ticker=ticker,
                     user_query=user_query if user_query else None,
                     use_conditional=use_conditional,
                     use_mongodb=use_mongodb,
-                    thread_id=thread_id if use_mongodb else None,
+                    thread_id=thread_id.strip() if use_mongodb else None,
+                    investor_profile=investor_profile,
                 )
 
                 st.session_state.analysis_result = result
                 st.session_state.last_ticker = ticker
-
-                st.success(f"Analysis completed for {ticker}!")
+                try:
+                    save_analysis_summary(result)
+                    st.success(f"Analysis completed for {ticker} and saved to Your Past Analyses.")
+                except OSError as history_error:
+                    logger.error(f"Unable to save local history: {history_error}")
+                    st.success(f"Analysis completed for {ticker}!")
+                    st.warning("Your result could not be saved to local history on this computer.")
 
             except Exception as e:
                 st.error(f"Analysis failed: {str(e)}")
                 logger.error(f"Streamlit analysis error: {str(e)}")
 
-    render_recent_analyses_summary(st.session_state.analysis_result)
+    render_beginner_recent_analyses()
 
     if st.session_state.analysis_result:
         state = st.session_state.analysis_result
 
         section_title("search", f"Analysis for {state['ticker']}", "teal")
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
             [
                 "📊 Stock Data",
                 "🏢 Company Info",
                 "💬 Sentiment",
                 "📈 Technical",
                 "🎯 Recommendation",
+                "🧩 Portfolio Fit",
                 "🔮 Forecast",
                 "🛡️ Risk",
                 "🕓 History",
@@ -745,13 +876,16 @@ def main():
             render_recommendation(state)
 
         with tab6:
-            render_price_forecast(state)
+            render_portfolio_fit(state)
 
         with tab7:
-            render_risk_metrics(state)
+            render_price_forecast(state)
 
         with tab8:
-            render_analysis_history(state.get("ticker"))
+            render_risk_metrics(state)
+
+        with tab9:
+            render_beginner_history()
 
         render_execution_info(state)
     else:

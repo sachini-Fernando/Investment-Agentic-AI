@@ -29,6 +29,7 @@ from ..tools.quant_tools import (
     calculate_position_size
 )
 from ..tools.llm_tools import generate_investment_recommendation
+from ..tools.portfolio_tools import build_portfolio_insights
 
 # ============================================
 # FIX: Import serialization helper
@@ -321,6 +322,9 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
             risk_factors.append("Market volatility and sector-specific risks")
         
         state['risk_factors'] = risk_factors
+        state['portfolio_insights'] = build_portfolio_insights(
+            state.get('investor_profile') or {}, state['ticker']
+        )
 
         llm_payload = {
             "ticker": state["ticker"],
@@ -340,6 +344,8 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
             "risk_metrics": state.get("risk_metrics"),
             "risk_factors": state['risk_factors'],
             "market_context": state.get("market_context"),
+            "investor_profile": state.get("investor_profile"),
+            "portfolio_insights": state.get("portfolio_insights"),
         }
 
         llm_result = generate_investment_recommendation(llm_payload)
@@ -394,9 +400,12 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
             risk_per_trade = 0.01 if risk_level == 'HIGH' else 0.02 if risk_level == 'MEDIUM' else 0.03
             stop_loss_pct = 0.08 if risk_level == 'HIGH' else 0.05 if risk_level == 'MEDIUM' else 0.03
             
+            profile = state.get('investor_profile') or {}
+            account_value = profile.get('portfolio_value', 100000)
+            account_value = 100000 if account_value is None else float(account_value)
             position_sizing = calculate_position_size(
                 current_price=current_price,
-                account_value=100000,  # Placeholder - should be user's portfolio value
+                account_value=account_value,
                 risk_per_trade=risk_per_trade,
                 stop_loss_pct=stop_loss_pct
             )
@@ -407,6 +416,9 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
                 'shares': position_sizing.get('shares', 0),
                 'reasoning': f"Based on {risk_level} risk level with {risk_per_trade:.1%} risk per trade"
             }
+            if state['portfolio_insights']['resulting_ticker_weight'] > 0.10:
+                state['position_sizing']['recommended_allocation'] = 0
+                state['position_sizing']['reasoning'] = 'No additional allocation suggested until concentration is reviewed.'
             
             # Calculate stop loss and take profit
             state['stop_loss'] = position_sizing.get('stop_loss_price')
