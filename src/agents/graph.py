@@ -207,6 +207,7 @@ def run_investment_analysis(
     use_conditional: bool = False,
     use_mongodb: bool = False,
     thread_id: Optional[str] = None,
+    investor_profile: Optional[dict] = None,
 ):
     """
         Runs the investment analysis workflow for a given ticker.
@@ -216,8 +217,8 @@ def run_investment_analysis(
             user_query: Optional user query for the analysis
             use_conditional: Whether to use conditional routing
             use_mongodb: Whether to use MongoDB for state persistence
-            thread_id: Optional thread ID for MongoDB checkpointing (required if
-    use_mongodb=True)
+            thread_id: Thread ID for MongoDB checkpointing (required when
+                use_mongodb=True).
 
         Returns:
             Final state with all agent outputs
@@ -228,6 +229,8 @@ def run_investment_analysis(
     initial_state: InvestmentState = {
         "ticker": ticker,
         "user_query": user_query,
+        "investor_profile": investor_profile,
+        "portfolio_insights": None,
         "messages": [],
         # Data Acquisition outputs
         "stock_data": None,

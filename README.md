@@ -20,6 +20,8 @@ This project was developed for the Information Retrieval and Web Analytics (IT 3
 - Recent analysis summaries and searchable analysis history in the Streamlit dashboard.
 - Optional conditional agent routing and MongoDB LangGraph checkpointing.
 - Interactive Streamlit dashboard with stock data, sentiment, forecasts, risk metrics, execution details, backtesting, and portfolio views.
+- Beginner-friendly portfolio context: goal, risk comfort, horizon, liquidity needs, concentration checks, allocation targets, and rebalance cues.
+- Automatic local analysis history that works without MongoDB and keeps the latest saved research for each ticker.
 - Command-line execution for scripted analysis.
 
 ## Project Structure
@@ -120,6 +122,15 @@ The `--thread-id` option is required when `--mongodb` is enabled. The command pr
 ```bash
 streamlit run app/streamlit_app.py
 ```
+
+## Beginner workflow
+
+1. Select a common ticker from the dashboard dropdown, or choose **Custom ticker** for another Yahoo Finance symbol.
+2. Complete **Your portfolio plan** so the agents can assess the idea against your objective, risk comfort, horizon, liquidity need, and existing exposure.
+3. Run the analysis, then use **Portfolio Fit** for target allocation, concentration, and rebalancing guidance.
+4. Find saved results in **Your Past Analyses**. History is stored locally in `data/analysis_history.json`; no account or MongoDB setup is required. Optional MongoDB workflow persistence keeps its manual Thread ID so you can identify each saved workflow.
+
+The portfolio-fit design reflects the core principles of asset allocation, diversification, risk tolerance, investment horizon, and periodic rebalancing summarized by [Investopedia](https://www.investopedia.com/terms/p/portfolio-investment.asp). It is educational guidance, not personalised financial advice.
 
 From the dashboard you can enter a ticker and question, choose conditional routing, enable MongoDB persistence, and inspect the resulting analysis. With MongoDB enabled, the dashboard also shows recent runs and searchable history. Additional pages provide backtesting and portfolio analysis.
 

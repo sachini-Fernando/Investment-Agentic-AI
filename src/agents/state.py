@@ -6,6 +6,8 @@ class InvestmentState(TypedDict):
     analysis_id: Optional[str]
     ticker: str
     user_query: Optional[str]
+    investor_profile: Optional[Dict]
+    portfolio_insights: Optional[Dict]
     
     # === COMMUNICATION CHANNEL ===
     messages: Annotated[List[Dict], add_messages]
