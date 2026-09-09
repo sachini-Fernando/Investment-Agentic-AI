@@ -40,3 +40,25 @@ def test_analyze_all_sentiment_returns_expected_keys():
     assert "sentiment_score" in results
     assert "news_summary" in results
     assert "annotated_articles" in results
+
+
+def test_nested_yfinance_news_provides_text_for_sentiment(monkeypatch):
+    from src.pipeline import market_data
+
+    class FakeTicker:
+        news = [{
+            "id": "story-1",
+            "content": {
+                "title": "Company reports strong growth",
+                "summary": "Profit beat expectations.",
+                "pubDate": "2026-09-08T15:29:15Z",
+                "provider": {"displayName": "Yahoo Finance"},
+                "canonicalUrl": {"url": "https://example.com/story-1"},
+            },
+        }]
+
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda ticker: FakeTicker())
+    articles = market_data.MarketDataIngestion().fetch_yfinance_news("AAPL", limit=1)
+
+    assert articles[0]["title"] == "Company reports strong growth"
+    assert articles[0]["content"] == "Profit beat expectations."
