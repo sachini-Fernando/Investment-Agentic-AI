@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
-from src.pipeline.local_history import load_local_history, save_analysis_summary  # noqa: E402
+from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -210,26 +210,16 @@ def render_sidebar():
         )
         use_mongodb = st.checkbox(
             "Save full workflow history to MongoDB",
-            value=False,
-            help="Optional. MongoDB requires a configured connection and a Thread ID for each saved workflow.",
+            value=True,
+            help="Optional. MongoDB requires MONGODB_URI. A unique analysis/thread ID is created automatically.",
         )
-        thread_id = ""
-        if use_mongodb:
-            thread_id = st.text_input(
-                "Thread ID",
-                value="",
-                help="Choose a unique label for this MongoDB workflow, for example: aapl-review-september.",
-            )
-            if not os.getenv("MONGODB_URI"):
-                st.warning("MongoDB needs MONGODB_URI in your .env file. Local history still saves automatically without it.")
-
     analyze_button = st.sidebar.button(
         "🚀 Analyze Stock",
         type="primary",
         use_container_width=True,
     )
 
-    return ticker, user_query, use_conditional, use_mongodb, thread_id, investor_profile, analyze_button
+    return ticker, user_query, use_conditional, use_mongodb, investor_profile, analyze_button
 
 
 def render_portfolio_fit(state):
@@ -589,8 +579,8 @@ def render_execution_info(state):
 
 
 def load_analysis_history(ticker=None, limit=10):
-    """Loads automatic on-device history; no database configuration required."""
-    history = load_local_history()
+    """Load MongoDB history when configured, with local JSON fallback."""
+    history = load_persistent_history()
     if ticker:
         history = [item for item in history if item.get("ticker") == ticker.upper()]
     return history[:limit]
@@ -794,12 +784,39 @@ def render_beginner_history():
                     st.warning(factor)
 
 
+def render_beginner_guide():
+    """Explain the dashboard's measures in plain language for new investors."""
+    with st.expander("📖 How to read this analysis", expanded=False):
+        st.write(
+            "This dashboard combines several clues. No single measure can predict the future, "
+            "so read the recommendation together with the risk warnings and your own plan."
+        )
+        guide = {
+            "Price and market data": "Current price is the latest available share price. Market cap is the total market value of the company. The 52-week high and low show the recent price range, not a target price.",
+            "Sentiment": "News sentiment runs from -1 (mostly negative) to +1 (mostly positive). Sentiment confidence tells how strongly the language model detected that tone; it is not the probability that the share price will rise.",
+            "RSI": "Relative Strength Index ranges from 0 to 100. Around 70 or above can mean recent buying was strong, while around 30 or below can mean recent selling was strong. It can stay high or low during a trend.",
+            "MACD": "Moving Average Convergence Divergence compares short- and long-term price momentum. A positive value can signal stronger recent momentum; it is not a guarantee of profit.",
+            "SMA and EMA": "Simple and exponential moving averages smooth prices. A price above an average can suggest an upward trend; EMA reacts faster to new prices than SMA.",
+            "Forecast": "The 7-day and 30-day forecasts are model estimates based on historical patterns. Forecast confidence describes model certainty, not investment certainty.",
+            "Volatility": "The typical size of price movements. Higher volatility means a bumpier ride and a greater chance of large gains or losses.",
+            "Sharpe ratio": "Return compared with volatility. Higher is generally better, but it depends on the period and the benchmark used.",
+            "Sortino ratio": "Like Sharpe, but focuses on harmful downside movements instead of all price movement. Higher is generally better.",
+            "Maximum drawdown": "The largest historical fall from a previous peak to a later low. It helps answer: how painful could a past decline have been?",
+            "Value at Risk (95%)": "An estimate of a bad one-day loss threshold based on history. A 95% VaR does not mean losses cannot be larger, and it is not a promise.",
+            "Beta": "How strongly the stock has moved compared with the broad market. Around 1 means similar movement, above 1 usually means larger swings, and below 1 usually means smaller swings.",
+            "Confidence and recommendation": "Confidence measures how consistently the available evidence supports the model's view. BUY, HOLD, and SELL are research signals for review, not instructions or guarantees.",
+        }
+        for measure, explanation in guide.items():
+            st.markdown(f"**{measure}:** {explanation}")
+        st.caption("Educational research only. Market data can be delayed or incomplete, and this tool does not replace professional financial advice.")
+
+
 def main():
     """Main Streamlit application."""
     load_theme()
     render_header()
 
-    ticker, user_query, use_conditional, use_mongodb, thread_id, investor_profile, analyze_button = render_sidebar()
+    ticker, user_query, use_conditional, use_mongodb, investor_profile, analyze_button = render_sidebar()
 
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
@@ -810,18 +827,12 @@ def main():
         with st.spinner(f"Analyzing {ticker}... This may take a moment."):
             try:
                 if use_mongodb and not os.getenv("MONGODB_URI"):
-                    st.warning("MongoDB is not configured, so this analysis will be saved only in automatic local history.")
                     use_mongodb = False
-                if use_mongodb and not thread_id.strip():
-                    st.warning("Enter a Thread ID to save this workflow to MongoDB. This analysis will still be saved in automatic local history.")
-                    use_mongodb = False
-
                 result = run_investment_analysis(
                     ticker=ticker,
                     user_query=user_query if user_query else None,
                     use_conditional=use_conditional,
                     use_mongodb=use_mongodb,
-                    thread_id=thread_id.strip() if use_mongodb else None,
                     investor_profile=investor_profile,
                 )
 
@@ -840,6 +851,7 @@ def main():
                 logger.error(f"Streamlit analysis error: {str(e)}")
 
     render_beginner_recent_analyses()
+    render_beginner_guide()
 
     if st.session_state.analysis_result:
         state = st.session_state.analysis_result

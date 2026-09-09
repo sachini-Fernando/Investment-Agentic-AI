@@ -81,6 +81,7 @@ GOOGLE_API_KEY=your_gemini_api_key
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=investment_agent_db
 MONGODB_COLLECTION_NAME=checkpoints
+MONGODB_HISTORY_COLLECTION=analysis_history
 
 # Optional data providers
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
@@ -112,10 +113,10 @@ python scripts/seed_database.py
 python main.py AAPL
 python main.py AAPL --query "Should I buy this stock?"
 python main.py AAPL --conditional
-python main.py AAPL --mongodb --thread-id aapl-demo-001
+python main.py AAPL --mongodb
 ```
 
-The `--thread-id` option is required when `--mongodb` is enabled. The command prints data acquisition, sentiment, financial reasoning, risk assessment, validation, and execution metadata.
+When MongoDB is enabled, the application creates a unique analysis/thread ID automatically for each run. The command prints data acquisition, sentiment, financial reasoning, risk assessment, validation, and execution metadata.
 
 ### Streamlit dashboard
 
@@ -128,7 +129,9 @@ streamlit run app/streamlit_app.py
 1. Select a common ticker from the dashboard dropdown, or choose **Custom ticker** for another Yahoo Finance symbol.
 2. Complete **Your portfolio plan** so the agents can assess the idea against your objective, risk comfort, horizon, liquidity need, and existing exposure.
 3. Run the analysis, then use **Portfolio Fit** for target allocation, concentration, and rebalancing guidance.
-4. Find saved results in **Your Past Analyses**. History is stored locally in `data/analysis_history.json`; no account or MongoDB setup is required. Optional MongoDB workflow persistence keeps its manual Thread ID so you can identify each saved workflow.
+4. Find saved results in **Your Past Analyses**. When `MONGODB_URI` is configured, summaries are saved in the `analysis_history` collection and full workflow checkpoints use an automatically generated ID. Without MongoDB, the app falls back to `data/analysis_history.json`.
+
+Open **How to read this analysis** in the dashboard for beginner-friendly explanations of sentiment, RSI, MACD, moving averages, forecasts, volatility, Sharpe, Sortino, drawdown, VaR, beta, confidence, and the BUY/HOLD/SELL labels. These are research signals, not guarantees or personal financial advice.
 
 The portfolio-fit design reflects the core principles of asset allocation, diversification, risk tolerance, investment horizon, and periodic rebalancing summarized by [Investopedia](https://www.investopedia.com/terms/p/portfolio-investment.asp). It is educational guidance, not personalised financial advice.
 
