@@ -11,6 +11,7 @@ Defines the graph structure connecting the 4 agents:
 """
 
 from typing import TypedDict, Annotated, Literal, Optional
+from uuid import uuid4
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
@@ -217,16 +218,18 @@ def run_investment_analysis(
             user_query: Optional user query for the analysis
             use_conditional: Whether to use conditional routing
             use_mongodb: Whether to use MongoDB for state persistence
-            thread_id: Thread ID for MongoDB checkpointing (required when
-                use_mongodb=True).
+            thread_id: Optional legacy override. When omitted, a unique thread
+                ID is generated automatically for MongoDB checkpointing.
 
         Returns:
             Final state with all agent outputs
     """
     logger.info(f"Starting investment analysis for ticker: {ticker}")
+    analysis_id = f"{ticker.upper()}-{uuid4().hex}"
 
     # Initialize the state
     initial_state: InvestmentState = {
+        "analysis_id": analysis_id,
         "ticker": ticker,
         "user_query": user_query,
         "investor_profile": investor_profile,
@@ -284,9 +287,6 @@ def run_investment_analysis(
                 "MongoDB checkpoint support is not available. "
                 "Please install langgraph-checkpoint-mongodb: py -m pip install langgraph-checkpoint-mongodb"
             )
-        if not thread_id:
-            raise ValueError("thread_id is required when use_mongodb=True")
-
         if use_conditional:
             checkpointer = create_mongodb_checkpointer_with_env()
             app = create_conditional_investment_graph(checkpointer=checkpointer)
@@ -294,8 +294,8 @@ def run_investment_analysis(
             checkpointer = create_mongodb_checkpointer_with_env()
             app = create_investment_graph(checkpointer=checkpointer)
 
-        # Run with thread_id for MongoDB checkpointing
-        config = {"configurable": {"thread_id": thread_id}}
+        # Generate a fresh thread automatically for every analysis run.
+        config = {"configurable": {"thread_id": thread_id or analysis_id}}
         result = app.invoke(initial_state, config=config)
 
     else:
