@@ -811,6 +811,28 @@ def render_beginner_guide():
         st.caption("Educational research only. Market data can be delayed or incomplete, and this tool does not replace professional financial advice.")
 
 
+def render_analysis_page(state):
+    """Render one analysis view selected from the sidebar navigation."""
+    page_options = {
+        "📊 Stock Data": render_stock_data,
+        "🏢 Company Info": render_company_info,
+        "💬 Sentiment": render_sentiment_analysis,
+        "📈 Technical": render_technical_indicators,
+        "🎯 Recommendation": render_recommendation,
+        "🧩 Portfolio Fit": render_portfolio_fit,
+        "🔮 Forecast": render_price_forecast,
+        "🛡️ Risk": render_risk_metrics,
+        "🕓 History": lambda current_state: render_beginner_history(),
+    }
+    selected_page = st.sidebar.radio(
+        "Analysis pages",
+        options=list(page_options),
+        key="analysis_page",
+        help="Choose which part of the completed analysis to view.",
+    )
+    page_options[selected_page](state)
+
+
 def main():
     """Main Streamlit application."""
     load_theme()
@@ -858,48 +880,7 @@ def main():
 
         section_title("search", f"Analysis for {state['ticker']}", "teal")
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
-            [
-                "📊 Stock Data",
-                "🏢 Company Info",
-                "💬 Sentiment",
-                "📈 Technical",
-                "🎯 Recommendation",
-                "🧩 Portfolio Fit",
-                "🔮 Forecast",
-                "🛡️ Risk",
-                "🕓 History",
-            ]
-        )
-
-        with tab1:
-            render_stock_data(state)
-
-        with tab2:
-            render_company_info(state)
-
-        with tab3:
-            render_sentiment_analysis(state)
-
-        with tab4:
-            render_technical_indicators(state)
-
-        with tab5:
-            render_recommendation(state)
-
-        with tab6:
-            render_portfolio_fit(state)
-
-        with tab7:
-            render_price_forecast(state)
-
-        with tab8:
-            render_risk_metrics(state)
-
-        with tab9:
-            render_beginner_history()
-
-        render_execution_info(state)
+        render_analysis_page(state)
     else:
         st.info("Enter a stock ticker and click 'Analyze Stock' to begin")
 

@@ -1,5 +1,19 @@
 [
   {
+    "analysis_id": "META-ae2096652a51449083379dbdace6cfdb",
+    "thread_id": "META-ae2096652a51449083379dbdace6cfdb",
+    "ticker": "META",
+    "saved_at": "2026-09-09T03:55:43.937134+00:00",
+    "recommendation": "HOLD",
+    "confidence": 0.45,
+    "risk_level": "HIGH",
+    "summary": "Heuristic synthesis used because Gemini was unavailable.",
+    "risk_factors": [
+      "Significant historical drawdown (-32.62%)"
+    ],
+    "question": "Is the current price overvalued or undervalued?"
+  },
+  {
     "analysis_id": "AMZN-a06f1ca9f14344708015eb31be3053f5",
     "thread_id": "AMZN-a06f1ca9f14344708015eb31be3053f5",
     "ticker": "AMZN",
