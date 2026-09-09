@@ -31,6 +31,20 @@ def test_summarize_news_uses_article_content():
     assert "Company posts earnings beat" in summary
 
 
+def test_analyze_all_sentiment_keeps_full_news_summary():
+    articles = [
+        {"title": "First event", "content": "Revenue increased."},
+        {"title": "Second event", "content": "The company expanded operations."},
+        {"title": "Third event", "content": "Management raised guidance."},
+    ]
+
+    result = analyze_all_sentiment(articles, ticker="AAPL")
+
+    assert "First event" in result["news_summary"]
+    assert "Second event" in result["news_summary"]
+    assert "Third event" in result["news_summary"]
+
+
 def test_analyze_all_sentiment_returns_expected_keys():
     results = analyze_all_sentiment(
         [{"title": "Earnings beat", "content": "Strong growth and profit"}],

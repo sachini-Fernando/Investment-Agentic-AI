@@ -1,4 +1,4 @@
-"""Simple on-device analysis history for the Streamlit dashboard."""
+"""Analysis history persistence for the Streamlit dashboard."""
 
 from __future__ import annotations
 
@@ -54,12 +54,12 @@ def _mongodb_history_collection():
         collection.create_index([("ticker", 1), ("saved_at", -1)])
         return collection
     except Exception as exc:
-        logger.warning(f"MongoDB history is unavailable; using local history: {exc}")
+        logger.warning(f"MongoDB history is unavailable: {exc}")
         return None
 
 
-def load_persistent_history(path: Optional[Path] = None) -> List[Dict[str, Any]]:
-    """Load MongoDB history when configured, otherwise load the local fallback."""
+def load_persistent_history(path: Optional[Path] = None, allow_local_fallback: bool = True) -> List[Dict[str, Any]]:
+    """Load MongoDB history, optionally falling back to the local JSON file."""
     collection = _mongodb_history_collection()
     if collection is not None:
         try:
@@ -68,7 +68,7 @@ def load_persistent_history(path: Optional[Path] = None) -> List[Dict[str, Any]]
                 return records
         except Exception as exc:
             logger.warning(f"Could not read MongoDB analysis history: {exc}")
-    return load_local_history(path)
+    return load_local_history(path) if allow_local_fallback else []
 
 
 def load_local_history(path: Optional[Path] = None) -> List[Dict[str, Any]]:
@@ -84,8 +84,12 @@ def load_local_history(path: Optional[Path] = None) -> List[Dict[str, Any]]:
         return []
 
 
-def save_analysis_summary(state: Dict[str, Any], path: Optional[Path] = None) -> Dict[str, Any]:
-    """Save a compact, beginner-readable record of a completed analysis."""
+def save_analysis_summary(
+    state: Dict[str, Any],
+    path: Optional[Path] = None,
+    allow_local_fallback: bool = True,
+) -> Dict[str, Any]:
+    """Save a compact history record, optionally allowing local fallback."""
     history_file = _history_path(path)
     summary = state.get("llm_summary") or "Analysis completed. Open this entry to review the evidence and risks."
     analysis_id = state.get("analysis_id") or create_analysis_id(str(state.get("ticker", "")))
@@ -114,7 +118,10 @@ def save_analysis_summary(state: Dict[str, Any], path: Optional[Path] = None) ->
             )
             return record
         except Exception as exc:
-            logger.warning(f"Could not save MongoDB analysis history; using local history: {exc}")
+            logger.warning(f"Could not save MongoDB analysis history: {exc}")
+
+    if not allow_local_fallback:
+        raise RuntimeError("MongoDB is required for analysis history, but it is not available.")
 
     records = [item for item in load_local_history(history_file) if item.get("ticker") != record["ticker"]]
     records.insert(0, record)

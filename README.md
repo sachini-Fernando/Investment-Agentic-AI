@@ -21,7 +21,7 @@ This project was developed for the Information Retrieval and Web Analytics (IT 3
 - Optional conditional agent routing and MongoDB LangGraph checkpointing.
 - Interactive Streamlit dashboard with stock data, sentiment, forecasts, risk metrics, execution details, backtesting, and portfolio views.
 - Beginner-friendly portfolio context: goal, risk comfort, horizon, liquidity needs, concentration checks, allocation targets, and rebalance cues.
-- Automatic local analysis history that works without MongoDB and keeps the latest saved research for each ticker.
+- Automatic MongoDB analysis history with generated analysis and thread IDs.
 - Command-line execution for scripted analysis.
 
 ## Project Structure
@@ -129,13 +129,13 @@ streamlit run app/streamlit_app.py
 1. Select a common ticker from the dashboard dropdown, or choose **Custom ticker** for another Yahoo Finance symbol.
 2. Complete **Your portfolio plan** so the agents can assess the idea against your objective, risk comfort, horizon, liquidity need, and existing exposure.
 3. Run the analysis, then use **Portfolio Fit** for target allocation, concentration, and rebalancing guidance.
-4. Find saved results in **Your Past Analyses**. When `MONGODB_URI` is configured, summaries are saved in the `analysis_history` collection and full workflow checkpoints use an automatically generated ID. Without MongoDB, the app falls back to `data/analysis_history.json`.
+4. Find saved results in **Your Past Analyses**. Summaries are saved automatically in the MongoDB `analysis_history` collection and full workflow checkpoints use a generated ID. The dashboard does not save analysis history to the local computer.
 
 Open **How to read this analysis** in the dashboard for beginner-friendly explanations of sentiment, RSI, MACD, moving averages, forecasts, volatility, Sharpe, Sortino, drawdown, VaR, beta, confidence, and the BUY/HOLD/SELL labels. These are research signals, not guarantees or personal financial advice.
 
 The portfolio-fit design reflects the core principles of asset allocation, diversification, risk tolerance, investment horizon, and periodic rebalancing summarized by [Investopedia](https://www.investopedia.com/terms/p/portfolio-investment.asp). It is educational guidance, not personalised financial advice.
 
-From the dashboard you can enter a ticker and question, choose conditional routing, enable MongoDB persistence, and inspect the resulting analysis. With MongoDB enabled, the dashboard also shows recent runs and searchable history. Additional pages provide backtesting and portfolio analysis.
+From the dashboard you can enter a ticker and question, choose conditional routing, and inspect the resulting analysis. The dashboard automatically stores recent runs and searchable history in MongoDB. Additional pages provide backtesting and portfolio analysis.
 
 ## Data and Analysis Pipeline
 
