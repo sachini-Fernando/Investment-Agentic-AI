@@ -5,7 +5,6 @@ Provides an interactive dashboard for investment analysis.
 
 import sys
 import base64
-import os
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -208,18 +207,13 @@ def render_sidebar():
             value=False,
             help="Enable dynamic agent routing",
         )
-        use_mongodb = st.checkbox(
-            "Save full workflow history to MongoDB",
-            value=True,
-            help="Optional. MongoDB requires MONGODB_URI. A unique analysis/thread ID is created automatically.",
-        )
     analyze_button = st.sidebar.button(
         "🚀 Analyze Stock",
         type="primary",
         use_container_width=True,
     )
 
-    return ticker, user_query, use_conditional, use_mongodb, investor_profile, analyze_button
+    return ticker, user_query, use_conditional, investor_profile, analyze_button
 
 
 def render_portfolio_fit(state):
@@ -373,14 +367,16 @@ def render_sentiment_analysis(state):
             sentiment_label = "Positive" if score > 0.3 else "Negative" if score < -0.3 else "Neutral"
             st.metric("Sentiment", sentiment_label)
 
-        if state.get("news_summary"):
-            st.write("**News Summary:**")
-            st.write(state["news_summary"])
+        with st.expander("📰 Full News Summary", expanded=True):
+            st.write(state.get("news_summary") or "No news summary is available.")
 
-        if state.get("key_events"):
-            st.write("**Key Events:**")
-            for event in state["key_events"]:
-                st.write(f"- {event}")
+        with st.expander("📌 Key Events", expanded=True):
+            key_events = state.get("key_events") or []
+            if key_events:
+                for event in key_events:
+                    st.markdown(f"- {event}")
+            else:
+                st.write("No key events were identified.")
     else:
         st.warning("No sentiment analysis available")
 
@@ -579,8 +575,8 @@ def render_execution_info(state):
 
 
 def load_analysis_history(ticker=None, limit=10):
-    """Load MongoDB history when configured, with local JSON fallback."""
-    history = load_persistent_history()
+    """Load analysis history from MongoDB only."""
+    history = load_persistent_history(allow_local_fallback=False)
     if ticker:
         history = [item for item in history if item.get("ticker") == ticker.upper()]
     return history[:limit]
@@ -612,8 +608,7 @@ def render_recent_analyses_summary(current_state=None):
         store = MongoPipelineStore()
         if not store.available:
             st.info(
-                "MongoDB is not connected, so saved analysis history is unavailable. "
-                "Run an analysis and enable MongoDB persistence to build your history."
+                "MongoDB is not connected, so saved analysis history is unavailable."
             )
         else:
             st.info("No saved analyses yet. Run an analysis to build your history.")
@@ -737,7 +732,7 @@ def render_analysis_history(ticker):
 
 def render_beginner_recent_analyses():
     """Show automatic saved history with first-time-investor wording."""
-    section_title("cpu", "Your Recent Analyses", "teal", "Saved automatically on this computer")
+    section_title("cpu", "Your Recent Analyses", "teal", "Saved automatically in MongoDB")
     recent = load_analysis_history(limit=3)
     if not recent:
         st.info("Your first completed analysis will be saved here automatically. Choose a ticker and select Analyze Stock to begin.")
@@ -754,7 +749,7 @@ def render_beginner_recent_analyses():
 
 
 def render_beginner_history():
-    """Provide a compact, no-database history view for new investors."""
+    """Provide a compact MongoDB-backed history view for new investors."""
     section_title("clock", "Your Past Analyses", "amber", "Compare your research without an account or database")
     all_history = load_analysis_history(limit=50)
     if not all_history:
@@ -775,7 +770,7 @@ def render_beginner_history():
             col2.write(f"**Confidence:** {confidence:.0%}" if confidence is not None else "**Confidence:** Not available")
             col2.write(f"**Your question:** {item.get('question', 'General stock review')}")
             col3.write(f"**Saved:** {date} UTC")
-            col3.write("**Stored on:** this computer")
+            col3.write("**Stored in:** MongoDB")
             st.write("**What this means:**")
             st.write(item.get("summary", "No summary was available."))
             if item.get("risk_factors"):
@@ -811,12 +806,34 @@ def render_beginner_guide():
         st.caption("Educational research only. Market data can be delayed or incomplete, and this tool does not replace professional financial advice.")
 
 
+def render_analysis_page(state):
+    """Render one analysis view selected from the sidebar navigation."""
+    page_options = {
+        "📊 Stock Data": render_stock_data,
+        "🏢 Company Info": render_company_info,
+        "💬 Sentiment": render_sentiment_analysis,
+        "📈 Technical": render_technical_indicators,
+        "🎯 Recommendation": render_recommendation,
+        "🧩 Portfolio Fit": render_portfolio_fit,
+        "🔮 Forecast": render_price_forecast,
+        "🛡️ Risk": render_risk_metrics,
+        "🕓 History": lambda current_state: render_beginner_history(),
+    }
+    selected_page = st.sidebar.radio(
+        "Analysis pages",
+        options=list(page_options),
+        key="analysis_page",
+        help="Choose which part of the completed analysis to view.",
+    )
+    page_options[selected_page](state)
+
+
 def main():
     """Main Streamlit application."""
     load_theme()
     render_header()
 
-    ticker, user_query, use_conditional, use_mongodb, investor_profile, analyze_button = render_sidebar()
+    ticker, user_query, use_conditional, investor_profile, analyze_button = render_sidebar()
 
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
@@ -826,25 +843,23 @@ def main():
     if analyze_button and ticker:
         with st.spinner(f"Analyzing {ticker}... This may take a moment."):
             try:
-                if use_mongodb and not os.getenv("MONGODB_URI"):
-                    use_mongodb = False
                 result = run_investment_analysis(
                     ticker=ticker,
                     user_query=user_query if user_query else None,
                     use_conditional=use_conditional,
-                    use_mongodb=use_mongodb,
+                    use_mongodb=True,
                     investor_profile=investor_profile,
                 )
 
                 st.session_state.analysis_result = result
                 st.session_state.last_ticker = ticker
                 try:
-                    save_analysis_summary(result)
-                    st.success(f"Analysis completed for {ticker} and saved to Your Past Analyses.")
+                    save_analysis_summary(result, allow_local_fallback=False)
+                    st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
                 except OSError as history_error:
-                    logger.error(f"Unable to save local history: {history_error}")
+                    logger.error(f"Unable to save MongoDB history: {history_error}")
                     st.success(f"Analysis completed for {ticker}!")
-                    st.warning("Your result could not be saved to local history on this computer.")
+                    st.error("The analysis could not be saved to MongoDB.")
 
             except Exception as e:
                 st.error(f"Analysis failed: {str(e)}")
@@ -858,48 +873,7 @@ def main():
 
         section_title("search", f"Analysis for {state['ticker']}", "teal")
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
-            [
-                "📊 Stock Data",
-                "🏢 Company Info",
-                "💬 Sentiment",
-                "📈 Technical",
-                "🎯 Recommendation",
-                "🧩 Portfolio Fit",
-                "🔮 Forecast",
-                "🛡️ Risk",
-                "🕓 History",
-            ]
-        )
-
-        with tab1:
-            render_stock_data(state)
-
-        with tab2:
-            render_company_info(state)
-
-        with tab3:
-            render_sentiment_analysis(state)
-
-        with tab4:
-            render_technical_indicators(state)
-
-        with tab5:
-            render_recommendation(state)
-
-        with tab6:
-            render_portfolio_fit(state)
-
-        with tab7:
-            render_price_forecast(state)
-
-        with tab8:
-            render_risk_metrics(state)
-
-        with tab9:
-            render_beginner_history()
-
-        render_execution_info(state)
+        render_analysis_page(state)
     else:
         st.info("Enter a stock ticker and click 'Analyze Stock' to begin")
 

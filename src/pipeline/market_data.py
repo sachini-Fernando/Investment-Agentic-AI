@@ -496,35 +496,49 @@ class MarketDataIngestion:
             news = yf.Ticker(ticker).news or []
             articles = []
             for item in news[:limit]:
-                url = item.get("link")
+                # yFinance now wraps story fields in `content`; retain support
+                # for the older flat response shape as well.
+                story = item.get("content") if isinstance(item.get("content"), dict) else item
+                url = (
+                    item.get("link")
+                    or story.get("canonicalUrl", {}).get("url")
+                    or story.get("clickThroughUrl", {}).get("url")
+                )
                 published_time = item.get("providerPublishTime")
+                published_at = story.get("pubDate") or story.get("displayTime")
+                title = story.get("title")
+                summary = story.get("summary") or story.get("description")
+                provider = story.get("provider") or {}
+                thumbnail = story.get("thumbnail") or {}
+                thumbnail_url = thumbnail.get("originalUrl")
+                if not thumbnail_url:
+                    resolutions = thumbnail.get("resolutions") or []
+                    thumbnail_url = resolutions[0].get("url") if resolutions else None
                 articles.append(
                     {
                         "article_id": _hash_text(
-                            item.get("title", ""), url or "", str(published_time or "")
+                            title or "", url or "", str(published_time or published_at or "")
                         ),
-                        "title": item.get("title"),
-                        "source": item.get("publisher"),
+                        "title": title,
+                        "source": item.get("publisher") or provider.get("displayName"),
                         "date": (
                             datetime.fromtimestamp(
                                 published_time, tz=timezone.utc
                             ).isoformat()
                             if published_time
-                            else None
+                            else published_at
                         ),
                         "published_at": (
                             datetime.fromtimestamp(
                                 published_time, tz=timezone.utc
                             ).isoformat()
                             if published_time
-                            else None
+                            else published_at
                         ),
                         "url": url,
-                        "content": item.get("summary") or item.get("description"),
-                        "summary": item.get("summary") or item.get("description"),
-                        "thumbnail": (item.get("thumbnail") or {})
-                        .get("resolutions", [{}])[0]
-                        .get("url"),
+                        "content": summary,
+                        "summary": summary,
+                        "thumbnail": thumbnail_url,
                         "source_type": "yfinance",
                     }
                 )

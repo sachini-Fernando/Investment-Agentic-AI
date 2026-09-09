@@ -287,7 +287,7 @@ def perform_topic_analysis(articles: List[Dict]) -> Dict[str, float]:
         return {}
 
 
-def summarize_news(articles: List[Dict], max_length: int = 200) -> str:
+def summarize_news(articles: List[Dict], max_length: Optional[int] = 200) -> str:
     """
     Summarizes news articles into a concise summary.
     
@@ -325,8 +325,8 @@ def summarize_news(articles: List[Dict], max_length: int = 200) -> str:
         sentences = [s.strip() for s in sentences if s.strip()]
         summary = ' '.join(sentences[:3])
         
-        # Truncate if too long
-        if len(summary) > max_length:
+        # Keep the complete summary when the dashboard requests it.
+        if max_length is not None and len(summary) > max_length:
             summary = summary[:max_length-3] + '...'
         
         logger.info(f"Generated summary: {summary[:50]}...")
@@ -377,7 +377,7 @@ def analyze_all_sentiment(articles: List[Dict], ticker: str) -> Dict[str, Any]:
     results['topic_analysis'] = perform_topic_analysis(articles)
     
     # Summarize news
-    results['news_summary'] = summarize_news(articles)
+    results['news_summary'] = summarize_news(articles, max_length=None)
 
     # Annotated articles for downstream storage / RAG
     results['annotated_articles'] = [_NLP.annotate_article(article) for article in articles]
