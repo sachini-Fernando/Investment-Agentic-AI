@@ -354,6 +354,8 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
         state['llm_reasoning'] = llm_result.get('reasoning', [])
         state['llm_decision_factors'] = llm_result.get('decision_factors', [])
         state['llm_summary'] = llm_result.get('summary')
+        state['direct_answer'] = llm_result.get('direct_answer')
+        state['beginner_explanation'] = llm_result.get('beginner_explanation')
         state['llm_raw_response'] = llm_result.get('raw_response')
         state['preliminary_recommendation'] = state['llm_recommendation']
         state['confidence_score'] = state['llm_confidence']

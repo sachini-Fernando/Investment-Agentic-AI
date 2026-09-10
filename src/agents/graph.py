@@ -263,6 +263,8 @@ def run_investment_analysis(
         "llm_reasoning": None,
         "llm_decision_factors": None,
         "llm_summary": None,
+        "direct_answer": None,
+        "beginner_explanation": None,
         "llm_raw_response": None,
         # Risk Assessment outputs
         "risk_metrics": None,

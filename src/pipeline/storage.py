@@ -189,6 +189,8 @@ class MongoPipelineStore:
             "reasoning": state.get("llm_reasoning") or state.get("reasoning_chain"),
             "decision_factors": state.get("llm_decision_factors"),
             "summary": state.get("llm_summary"),
+            "direct_answer": state.get("direct_answer"),
+            "beginner_explanation": state.get("beginner_explanation"),
             "position_sizing": state.get("position_sizing"),
             "stop_loss": state.get("stop_loss"),
             "take_profit": state.get("take_profit"),

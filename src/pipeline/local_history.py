@@ -102,6 +102,7 @@ def save_analysis_summary(
         "confidence": _as_float(state.get("llm_confidence") or state.get("confidence_score")),
         "risk_level": state.get("risk_level") or "Not available",
         "summary": str(summary),
+        "direct_answer": state.get("direct_answer") or "No direct answer was available.",
         "risk_factors": [str(item) for item in (state.get("risk_factors") or [])][:3],
         "question": state.get("user_query") or "General stock review",
     }
