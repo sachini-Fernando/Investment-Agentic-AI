@@ -1,3 +1,4 @@
+
 """
 Streamlit UI for the Investment Agentic AI system.
 Provides an interactive dashboard for investment analysis.
@@ -98,7 +99,7 @@ def load_theme():
 
 def render_header():
     """Renders the application header."""
-    hero_candidates = ["market-hero.jpg", "market-hero.jpeg", "market-hero.png", "market-hero.svg"]
+    hero_candidates = ["market-hero.gif", "market-hero.jpg", "market-hero.jpeg", "market-hero.png", "market-hero.svg"]
     hero_image_html = ""
 
     for filename in hero_candidates:
@@ -175,12 +176,6 @@ def render_sidebar():
         ticker = ticker_options[selected_ticker]
         st.sidebar.caption(f"Selected: **{ticker}**")
 
-    user_query = st.sidebar.text_area(
-        "💬 Your Question",
-        placeholder="e.g., Should I buy this stock?",
-        help="Ask a specific question about the stock",
-    )
-
     with st.sidebar.expander("🎯 Your portfolio plan", expanded=True):
         st.caption("A stock idea is more useful when it fits your goal, time horizon, and risk comfort.")
         goal = st.selectbox("Primary goal", ["Long-term growth", "Income", "Capital preservation", "Balanced growth and income"])
@@ -213,7 +208,23 @@ def render_sidebar():
         use_container_width=True,
     )
 
-    return ticker, user_query, use_conditional, investor_profile, analyze_button
+    return ticker, use_conditional, investor_profile, analyze_button
+
+
+def render_question_chat():
+    """Render the chat composer and retain the latest submitted question."""
+    submitted_question = st.chat_input(
+        "Ask about this stock, its risks, or the outlook...",
+        key="question_chat_input",
+    )
+    if submitted_question and submitted_question.strip():
+        st.session_state.chat_question = submitted_question.strip()
+
+    question = st.session_state.get("chat_question", "")
+    if question:
+        with st.chat_message("user"):
+            st.write(question)
+    return question, bool(submitted_question and submitted_question.strip())
 
 
 def render_portfolio_fit(state):
@@ -227,9 +238,9 @@ def render_portfolio_fit(state):
     allocation = insights["target_allocation"]
     chart = go.Figure(data=[go.Pie(
         labels=list(allocation), values=list(allocation.values()), hole=0.58,
-        marker={"colors": ["#40d1c8", "#7ca7ff", "#f5b84b"]}, textinfo="label+percent",
+        marker={"colors": ["#c85c3d", "#567b76", "#b9823b"]}, textinfo="label+percent",
     )])
-    chart.update_layout(height=300, margin=dict(l=15, r=15, t=15, b=15), paper_bgcolor="rgba(0,0,0,0)", font_color="#edf3fb")
+    chart.update_layout(height=300, margin=dict(l=15, r=15, t=15, b=15), paper_bgcolor="rgba(0,0,0,0)", font_color="#252421")
     left, right = st.columns(2)
     with left:
         st.plotly_chart(chart, use_container_width=True)
@@ -343,14 +354,14 @@ def render_sentiment_analysis(state):
                 title={"text": "Sentiment Score"},
                 gauge={
                     "axis": {"range": [-1, 1]},
-                    "bar": {"color": "#40d1c8"},
+                    "bar": {"color": "#c85c3d"},
                     "steps": [
                         {"range": [-1, -0.33], "color": "#ff7070"},
                         {"range": [-0.33, 0.33], "color": "#a7b8cf"},
                         {"range": [0.33, 1], "color": "#49d39c"},
                     ],
                     "threshold": {
-                        "line": {"color": "#f5b84b", "width": 4},
+                        "line": {"color": "#b9823b", "width": 4},
                         "thickness": 0.75,
                         "value": 0,
                     },
@@ -414,6 +425,14 @@ def render_recommendation(state):
     llm_confidence = state.get("llm_confidence")
 
     if final_recommendation or llm_recommendation:
+        if state.get("user_query"):
+            st.markdown("**Answer to your question**")
+            st.info(state.get("direct_answer") or "The agent could not produce a direct answer from the available evidence.")
+
+        if state.get("beginner_explanation"):
+            st.markdown("**What this means**")
+            st.write(state["beginner_explanation"])
+
         if final_recommendation == "BUY":
             st.markdown(
                 f'<div class="recommendation-buy">{icon_svg("trending-up", "1.3rem")}BUY</div>',
@@ -773,6 +792,9 @@ def render_beginner_history():
             col3.write("**Stored in:** MongoDB")
             st.write("**What this means:**")
             st.write(item.get("summary", "No summary was available."))
+            if item.get("direct_answer"):
+                st.write("**Answer to your question:**")
+                st.info(item["direct_answer"])
             if item.get("risk_factors"):
                 st.write("**Things to keep in mind:**")
                 for factor in item["risk_factors"]:
@@ -833,12 +855,14 @@ def main():
     load_theme()
     render_header()
 
-    ticker, user_query, use_conditional, investor_profile, analyze_button = render_sidebar()
-
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
     if "last_ticker" not in st.session_state:
         st.session_state.last_ticker = None
+
+    ticker, use_conditional, investor_profile, analyze_button = render_sidebar()
+    user_query, chat_submitted = render_question_chat()
+    analyze_button = analyze_button or chat_submitted
 
     if analyze_button and ticker:
         with st.spinner(f"Analyzing {ticker}... This may take a moment."):
