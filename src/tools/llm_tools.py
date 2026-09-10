@@ -271,9 +271,23 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not rationale:
         rationale.append("Insufficient strong signals for a high-conviction decision.")
 
+    question = (payload.get("user_query") or "").strip()
+    question_context = f"For your question, '{question}', " if question else "Based on the available evidence, "
+    direct_answer = (
+        f"{question_context}the research signal is {recommendation}. "
+        "Review the evidence and risks below before making any decision."
+    )
+    beginner_explanation = (
+        f"The agent found {len(decision_factors)} scored signals. "
+        f"The overall result is {recommendation} with {confidence:.0%} model confidence. "
+        "This is a research signal, not a guaranteed outcome."
+    )
+
     return {
         "recommendation": recommendation,
         "confidence": round(confidence, 2),
+        "direct_answer": direct_answer,
+        "beginner_explanation": beginner_explanation,
         "reasoning": rationale,
         "decision_factors": decision_factors,
         "summary": "Heuristic synthesis used because Gemini was unavailable.",
@@ -370,7 +384,9 @@ class GeminiRecommendationEngine:
             "{\n"
             '  "recommendation": "BUY|SELL|HOLD",\n'
             '  "confidence": 0.0-1.0,\n'
+            '  "direct_answer": "A direct answer to the user question",\n'
             '  "summary": "one concise sentence",\n'
+            '  "beginner_explanation": "plain-language explanation for someone new to investing",\n'
             '  "reasoning": ["bullet 1", "bullet 2", "bullet 3"],\n'
             '  "decision_factors": [\n'
             '    {\n'
@@ -465,7 +481,9 @@ class GeminiRecommendationEngine:
 
         # Final instruction
         prompt += (
-            "Based on ALL the evidence above, provide your recommendation.\n"
+            "Based on ALL the evidence above, answer the user's exact question first.\n"
+            "Then provide the recommendation, evidence, risks, and a plain-language explanation for a beginner.\n"
+            "If the question cannot be answered from the evidence, say so clearly and recommend HOLD.\n"
             "Be strict, transparent, and conservative when confidence is weak.\n"
             "Return ONLY valid JSON as specified."
         )
@@ -564,7 +582,9 @@ class GeminiRecommendationEngine:
             result = {
                 "recommendation": parsed.get("recommendation", "HOLD"),
                 "confidence": parsed.get("confidence", 0.5),
+                "direct_answer": str(parsed.get("direct_answer", "The available evidence is insufficient to answer this question confidently.")),
                 "summary": str(parsed.get("summary", "Gemini synthesized the available evidence.")),
+                "beginner_explanation": str(parsed.get("beginner_explanation", "Review the evidence and risks before making an investment decision.")),
                 "reasoning": parsed.get("reasoning", ["Gemini returned no detailed reasoning."]),
                 "decision_factors": parsed.get("decision_factors", []),
                 "risk_notes": parsed.get("risk_notes", []),
@@ -635,3 +655,5 @@ def generate_investment_recommendation(payload: Dict[str, Any]) -> Dict[str, Any
     """
     engine = GeminiRecommendationEngine()
     return engine.generate(payload)
+
+

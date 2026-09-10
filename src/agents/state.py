@@ -42,6 +42,8 @@ class InvestmentState(TypedDict):
     llm_reasoning: Optional[List[str]]    # Gemini rationale steps
     llm_decision_factors: Optional[List[Dict]]  # Structured decision factors
     llm_summary: Optional[str]            # Gemini summary
+    direct_answer: Optional[str]           # Answer to the user's exact question
+    beginner_explanation: Optional[str]   # Plain-language interpretation
     llm_raw_response: Optional[str]       # Raw LLM response for traceability
     
     # === RISK ASSESSMENT & VALIDATION AGENT OUTPUTS ===
