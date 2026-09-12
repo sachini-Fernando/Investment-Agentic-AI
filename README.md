@@ -9,6 +9,7 @@ This project was developed for the Information Retrieval and Web Analytics (IT 3
 - Four-agent LangGraph workflow for data acquisition, NLP, financial reasoning, and risk assessment.
 - Multi-source market ingestion using yFinance, Alpha Vantage, and NewsAPI.
 - Historical prices, company profiles, financial statements, and financial news retrieval.
+- Reliable market data organized into quote metadata, validated history, provider fallback, market status, timestamps, sources, currency, and exchange.
 - Technical indicators, fundamental analysis, volatility, Sharpe, Sortino, VaR, and other risk metrics.
 - FinBERT sentiment analysis with a keyword fallback when the model is unavailable.
 - spaCy named-entity recognition with a regex fallback.
