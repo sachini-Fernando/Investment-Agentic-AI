@@ -5,6 +5,7 @@ Provides functions for fetching stock data, financial statements, news
 articles, and IR search. 
 """ 
  
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any 
 from loguru import logger 
  
@@ -29,9 +30,25 @@ def fetch_stock_data(ticker: str, period: str = "1y") -> Optional[Dict]:
     """ 
     try: 
         logger.info(f"Fetching stock data for {ticker}") 
-        snapshot = _INGESTION.fetch_yfinance_snapshot(ticker) 
-        alpha_quote = _INGESTION.fetch_alpha_vantage_quote(ticker) 
-        data = {**snapshot, **alpha_quote} 
+        snapshot = _INGESTION.fetch_yfinance_snapshot(ticker)
+        alpha_quote = _INGESTION.fetch_alpha_vantage_quote(ticker)
+        if not snapshot and not alpha_quote:
+            return None
+
+        # yFinance is preferred for metadata; Alpha Vantage fills missing quote fields.
+        data = {**alpha_quote, **snapshot}
+        sources = [
+            name for name, payload in (("yfinance", snapshot), ("alpha_vantage", alpha_quote))
+            if payload
+        ]
+        data["source"] = " + ".join(sources)
+        data["sources_used"] = sources
+        data["data_timestamp"] = (
+            snapshot.get("quote_timestamp")
+            or snapshot.get("as_of")
+            or datetime.now(timezone.utc).isoformat()
+        )
+        data.setdefault("market_status", "Unknown")
         return data 
          
     except Exception as e: 
@@ -211,4 +228,4 @@ def fetch_all_data(ticker: str) -> Dict[str, Any]:
     } 
      
     logger.info(f"Completed fetching all data for {ticker}") 
-    return data         
+    return data

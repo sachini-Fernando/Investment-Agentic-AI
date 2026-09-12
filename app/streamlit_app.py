@@ -1,4 +1,3 @@
-
 """
 Streamlit UI for the Investment Agentic AI system.
 Provides an interactive dashboard for investment analysis.
@@ -295,6 +294,22 @@ def render_stock_data(state):
             st.metric(
                 "52W Low",
                 f"${data.get('52_week_low', 'N/A'):.2f}" if data.get("52_week_low") else "N/A",
+            )
+
+        st.markdown("**Market data quality**")
+        quality_col1, quality_col2, quality_col3, quality_col4 = st.columns(4)
+        quality_col1.caption(f"Market: {data.get('market_status', 'Unknown')}")
+        quality_col2.caption(f"Currency: {data.get('currency', 'N/A')}")
+        quality_col3.caption(f"Exchange: {data.get('exchange', 'N/A')}")
+        quality_col4.caption(f"Source: {data.get('source', 'N/A')}")
+        st.caption(f"Quote timestamp: {data.get('data_timestamp') or data.get('as_of', 'N/A')}")
+
+        history = state.get("historical_prices") or []
+        if history:
+            st.caption(
+                f"Validated history: {len(history):,} records, "
+                f"{history[0].get('date', 'N/A')[:10]} to {history[-1].get('date', 'N/A')[:10]} "
+                "(missing and invalid rows removed)"
             )
 
         with st.expander("📋 Additional Stock Information"):

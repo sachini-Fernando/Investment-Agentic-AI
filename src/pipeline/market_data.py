@@ -62,6 +62,41 @@ def _hash_text(*parts: str) -> str:
     return digest.hexdigest()
 
 
+def _normalize_market_status(info: Dict[str, Any]) -> str:
+    """Convert provider market-state values into dashboard labels."""
+    state = str(info.get("marketState") or info.get("market_state") or "").upper()
+    return {
+        "REGULAR": "Open",
+        "PRE": "Pre-market",
+        "POST": "After-hours",
+        "CLOSED": "Closed",
+    }.get(state, "Unknown")
+
+
+def validate_price_history(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep dated, positive, duplicate-free OHLC records in chronological order."""
+    valid_records: Dict[str, Dict[str, Any]] = {}
+    for record in records or []:
+        date_value = record.get("date")
+        close = _safe_float(record.get("close"))
+        high = _safe_float(record.get("high"))
+        low = _safe_float(record.get("low"))
+        if not date_value or close is None or close <= 0:
+            continue
+        if high is not None and low is not None and high < low:
+            continue
+        valid_records[str(date_value)] = {
+            **record,
+            "open": _safe_float(record.get("open")),
+            "high": high,
+            "low": low,
+            "close": close,
+            "adj_close": _safe_float(record.get("adj_close")),
+            "volume": _safe_int(record.get("volume")),
+        }
+    return [valid_records[key] for key in sorted(valid_records)]
+
+
 ####################################
 # clean_price_frame()
 ####################################
@@ -130,6 +165,13 @@ class MarketDataIngestion:
                 "52_week_low": _safe_float(info.get("fiftyTwoWeekLow")),
                 "avg_volume": _safe_int(info.get("averageVolume")),
                 "shares_outstanding": _safe_int(info.get("sharesOutstanding")),
+                "currency": info.get("currency") or info.get("financialCurrency"),
+                "exchange": info.get("exchange") or info.get("fullExchangeName"),
+                "market_status": _normalize_market_status(info),
+                "quote_timestamp": (
+                    datetime.fromtimestamp(info["regularMarketTime"], tz=timezone.utc).isoformat()
+                    if info.get("regularMarketTime") else None
+                ),
                 "as_of": datetime.now(timezone.utc).isoformat(),
                 "source": "yfinance",
             }
@@ -179,7 +221,7 @@ class MarketDataIngestion:
                         "source": "yfinance",
                     }
                 )
-            return records
+            return validate_price_history(records)
         except Exception as exc:
             logger.warning(f"yFinance history fetch failed for {ticker}:{exc}")
             return []
