@@ -164,16 +164,6 @@ The tests include agent behavior, data tools, sentiment tools, LLM helpers, quan
 
 InvestSage provides informational analysis only. Market data may be delayed or incomplete, model outputs can be wrong, and recommendations should be independently verified. Do not use the system as the sole basis for financial decisions, and do not commit API keys or other credentials to source control.
 
-## Security and Compliance Controls
-
-- Streamlit access requires a user account. Passwords are stored as salted PBKDF2 hashes, and sessions expire automatically.
-- Analysis history is stored with a `user_id`; dashboard history queries are filtered to the signed-in user.
-- Ticker symbols are validated before provider requests. Provider calls use per-provider rate limits and bounded `429` retries.
-- Secrets are read from environment variables. Set `SESSION_SECRET` and keep `.env`, `data/users.json`, and audit logs out of source control.
-- Authentication and other security-sensitive outcomes are written to the JSONL audit log configured by `AUDIT_LOG_PATH`.
-- This application does not place orders. The trading guard rejects requests unless explicit confirmation and a broker adapter are supplied, and it still refuses because no broker integration is implemented.
-- Alerts, recommendations, and portfolio guidance are educational research signals, not financial advice or automatic trading instructions.
-
 ## License
 
 See [LICENSE](LICENSE).

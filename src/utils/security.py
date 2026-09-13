@@ -1,196 +1,169 @@
-"""Security and compliance primitives for the investment dashboard."""
-
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import os
 import re
-import secrets
-import threading
 import time
-from collections import deque
-from dataclasses import dataclass, field
+from collections import defaultdict, deque
+from datetime import datetime, timezone
+from hashlib import pbkdf2_hmac
 from pathlib import Path
-from typing import Any, Deque, Dict, Optional
+from typing import Any, Deque, Dict, Iterable, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
+USERS_FILE = DATA_DIR / "users.json"
+AUDIT_LOG_PATH = DATA_DIR / "audit.log"
+SECRETS_FILE = PROJECT_ROOT / ".env"
+
+_RATE_LIMIT_WINDOWS: Dict[str, Deque[float]] = defaultdict(deque)
 
 
-TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.=-]{0,14}$")
-REQUIRED_SECRET_NAMES = ("SESSION_SECRET",)
+def _ensure_data_dir() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-class SecurityError(Exception):
-    """Base error for rejected security-sensitive operations."""
+def _hash_password(password: str, salt: Optional[bytes] = None) -> str:
+    salt_bytes = salt or os.urandom(16)
+    digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, 260000)
+    return f"pbkdf2_sha256$260000${salt_bytes.hex()}${digest.hex()}"
 
 
-class AuthenticationError(SecurityError):
-    """Raised when credentials or a session are invalid."""
-
-
-class AuthorizationError(SecurityError):
-    """Raised when a user accesses another user's data."""
-
-
-class RateLimitExceeded(SecurityError):
-    """Raised when an external-provider request limit is exceeded."""
-
-
-class TradingNotAvailable(SecurityError):
-    """Raised because analysis does not execute trades."""
-
-
-def validate_ticker(ticker: str) -> str:
-    """Normalize and validate a provider ticker before any network request."""
-    normalized = str(ticker or "").strip().upper()
-    if not TICKER_PATTERN.fullmatch(normalized):
-        raise ValueError("Ticker must be 1-15 characters and contain only letters, numbers, '.', '=' or '-'.")
-    return normalized
-
-
-def hash_password(password: str, iterations: int = 260_000) -> str:
-    if len(password or "") < 12:
-        raise ValueError("Password must contain at least 12 characters.")
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
-    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
-
-
-def verify_password(password: str, encoded: str) -> bool:
+def _verify_password(password: str, encoded: str) -> bool:
     try:
-        algorithm, iteration_text, salt_hex, digest_hex = encoded.split("$", 3)
-        if algorithm != "pbkdf2_sha256":
-            return False
-        digest = hashlib.pbkdf2_hmac(
-            "sha256", password.encode(), bytes.fromhex(salt_hex), int(iteration_text)
-        )
-        return hmac.compare_digest(digest.hex(), digest_hex)
-    except (AttributeError, TypeError, ValueError):
+        algorithm, iterations, salt_hex, digest_hex = encoded.split("$")
+    except ValueError:
         return False
 
+    if algorithm != "pbkdf2_sha256":
+        return False
 
-@dataclass
-class SessionManager:
-    """Small in-process session registry for the Streamlit process."""
+    try:
+        iterations_int = int(iterations)
+    except ValueError:
+        return False
 
-    ttl_seconds: int = 8 * 60 * 60
-    _sessions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-
-    def create(self, user_id: str) -> str:
-        token = secrets.token_urlsafe(32)
-        self._sessions[token] = {"user_id": user_id, "expires_at": time.time() + self.ttl_seconds}
-        return token
-
-    def user_for(self, token: str) -> str:
-        session = self._sessions.get(token)
-        if not session or session["expires_at"] <= time.time():
-            self._sessions.pop(token, None)
-            raise AuthenticationError("Your session has expired. Please sign in again.")
-        return str(session["user_id"])
-
-    def revoke(self, token: str) -> None:
-        self._sessions.pop(token, None)
+    salt_bytes = bytes.fromhex(salt_hex)
+    expected = pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, iterations_int)
+    return expected.hex() == digest_hex
 
 
-@dataclass
-class UserDirectory:
-    """Small file-backed user registry storing only password hashes."""
-
-    path: Path = field(default_factory=lambda: Path(os.getenv("AUTH_USERS_FILE", "data/users.json")))
-
-    def _read(self) -> Dict[str, str]:
-        if not self.path.exists():
-            return {}
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except (OSError, json.JSONDecodeError):
-            return {}
-
-    def register(self, user_id: str, password: str) -> None:
-        normalized = user_id.strip().lower()
-        if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,63}", normalized):
-            raise ValueError("User ID must be 3-64 characters using letters, numbers, '.', '_' or '-'.")
-        users = self._read()
-        if normalized in users:
-            raise ValueError("User already exists.")
-        users[normalized] = hash_password(password)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(users, indent=2), encoding="utf-8")
-
-    def authenticate(self, user_id: str, password: str) -> bool:
-        encoded = self._read().get(user_id.strip().lower())
-        return bool(encoded and verify_password(password, encoded))
+def _load_users() -> Dict[str, str]:
+    _ensure_data_dir()
+    if not USERS_FILE.exists():
+        return {}
+    try:
+        payload = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
-@dataclass
-class SlidingWindowRateLimiter:
-    """Thread-safe per-provider limiter for outbound API calls."""
-
-    max_calls: int = 5
-    window_seconds: float = 60.0
-    _calls: Dict[str, Deque[float]] = field(default_factory=dict)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
-
-    def check(self, provider: str) -> None:
-        now = time.monotonic()
-        with self._lock:
-            calls = self._calls.setdefault(provider, deque())
-            while calls and now - calls[0] >= self.window_seconds:
-                calls.popleft()
-            if len(calls) >= self.max_calls:
-                retry_after = max(1, int(self.window_seconds - (now - calls[0])))
-                raise RateLimitExceeded(f"{provider} rate limit reached; retry after {retry_after} seconds.")
-            calls.append(now)
+def _save_users(users: Dict[str, str]) -> None:
+    _ensure_data_dir()
+    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
 
 
-def load_secret(name: str, required: bool = False) -> Optional[str]:
-    """Read a secret from the environment without logging its value."""
-    value = os.getenv(name)
-    if required and not value:
-        raise SecurityError(f"Required secret {name} is not configured.")
-    return value
+def ensure_default_user(username: str = "demo", password: str = "invest123") -> str:
+    """Creates a default demo account if none exist so the app remains usable."""
+    users = _load_users()
+    if username not in users:
+        users[username] = _hash_password(password)
+        _save_users(users)
+    return username
 
 
-def validate_secret_configuration() -> None:
-    missing = [name for name in REQUIRED_SECRET_NAMES if not os.getenv(name)]
-    if missing:
-        raise SecurityError(f"Missing required secret configuration: {', '.join(missing)}")
+def authenticate_user(username: str, password: str) -> bool:
+    user_name = (username or "").strip()
+    if not user_name or not password:
+        return False
+
+    users = _load_users()
+    if not users:
+        ensure_default_user()
+        users = _load_users()
+
+    stored_hash = users.get(user_name)
+    if not stored_hash:
+        return False
+    return _verify_password(password, stored_hash)
 
 
-def audit_event(
-    action: str,
-    user_id: str,
-    outcome: str,
-    details: Optional[Dict[str, Any]] = None,
-    path: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """Append a redacted, structured audit event to a local JSONL log."""
+def validate_ticker_symbol(symbol: str) -> str:
+    """Normalize a ticker into a safe, recognizable symbol string."""
+    if symbol is None:
+        raise ValueError("Ticker symbol is required.")
+
+    candidate = str(symbol).strip().upper()
+    if not candidate:
+        raise ValueError("Ticker symbol is required.")
+
+    if re.fullmatch(r"[A-Z][A-Z0-9.-]{0,10}", candidate) is None:
+        raise ValueError("Ticker symbol must contain letters, numbers, dots, or dashes only.")
+
+    if any(char in candidate for char in ("$", "@", "#", "!", "?", " ")):
+        raise ValueError("Ticker symbol contains unsupported characters.")
+
+    return candidate
+
+
+def check_rate_limit(user_id: str, limit: int = 20, window_seconds: int = 60) -> bool:
+    """Returns True when the user is still within the allowed request budget."""
+    if not user_id:
+        return False
+    now = time.time()
+    bucket = _RATE_LIMIT_WINDOWS[user_id]
+    bucket.append(now)
+    while bucket and bucket[0] < now - window_seconds:
+        bucket.popleft()
+
+    if len(bucket) > limit:
+        return False
+    return True
+
+
+def get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Resolve a secret from environment first, then from a local .env file."""
+    value = os.getenv(key)
+    if value is not None:
+        return value
+
+    if not SECRETS_FILE.exists():
+        return default
+
+    try:
+        for line in SECRETS_FILE.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            name, raw_value = stripped.split("=", 1)
+            if name.strip() == key:
+                return raw_value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return default
+
+
+def log_audit_event(user_id: str, action: str, details: Optional[Dict[str, Any]] = None, outcome: str = "success") -> Dict[str, Any]:
+    """Append a JSON record to the audit log for user actions."""
+    _ensure_data_dir()
     event = {
-        "event_id": secrets.token_hex(12),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user_id": user_id or "anonymous",
         "action": action,
-        "user_id": user_id,
-        "outcome": outcome,
         "details": details or {},
+        "outcome": outcome,
     }
-    audit_path = path or Path(os.getenv("AUDIT_LOG_PATH", "data/audit.log"))
-    audit_path.parent.mkdir(parents=True, exist_ok=True)
-    with audit_path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, sort_keys=True) + "\n")
+    with AUDIT_LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, default=str) + "\n")
     return event
 
 
-def authorize_owner(resource: Dict[str, Any], user_id: str) -> None:
-    owner_id = resource.get("user_id") or resource.get("owner_id")
-    if owner_id != user_id:
-        raise AuthorizationError("You are not authorized to access this record.")
-
-
-def execute_trade(*_: Any, confirmation: bool = False, broker: Any = None, **__: Any) -> None:
-    """Reject trading unless an explicit confirmation and broker adapter exist."""
-    if not confirmation or broker is None:
-        raise TradingNotAvailable(
-            "No trade was placed. Explicit confirmation and a configured broker integration are required."
-        )
-    raise TradingNotAvailable("Broker trading is intentionally unavailable in this analysis-only application.")
+__all__ = [
+    "authenticate_user",
+    "check_rate_limit",
+    "ensure_default_user",
+    "get_secret",
+    "log_audit_event",
+    "validate_ticker_symbol",
+]

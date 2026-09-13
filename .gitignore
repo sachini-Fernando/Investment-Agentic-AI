@@ -5,9 +5,6 @@ venv/
 # Environment variables / secrets
 .env.example
 .env
-data/users.json
-data/audit.log
-data/audit-*.log
 
 # Python cache
 __pycache__/
