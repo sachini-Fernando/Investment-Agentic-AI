@@ -8,6 +8,10 @@ import sys
 import base64
 from pathlib import Path
 
+# Make the repository root importable when Streamlit executes this file.
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
 import plotly.graph_objects as go
 import streamlit as st
 from loguru import logger
@@ -20,10 +24,6 @@ from src.utils.security import (
     log_audit_event,
     validate_ticker_symbol,
 )
-
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402

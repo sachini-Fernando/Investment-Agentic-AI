@@ -1,0 +1,6 @@
+{"timestamp": "2026-09-13T13:58:20.991698+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-13T14:39:03.257741+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
+{"timestamp": "2026-09-13T14:39:19.253340+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-13T14:43:31.726512+00:00", "user_id": "user", "action": "portfolio_holding_added", "details": {"ticker": "MSFT \u2014 MICROSOFT"}, "outcome": "success"}
+{"timestamp": "2026-09-13T14:44:46.959158+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
+{"timestamp": "2026-09-13T14:44:53.760249+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
