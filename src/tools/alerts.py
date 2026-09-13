@@ -171,7 +171,7 @@ def evaluate_alerts(
     negative_threshold = _number(news_rule.get("threshold"))
     negative_article = _recent_negative_news(articles, current_time, int(news_rule.get("lookback_days", 3)))
     sentiment = _number(state.get("sentiment_score"))
-    if news_rule.get("enabled") and negative_article and (negative_threshold is None or sentiment is None or sentiment <= negative_threshold):
+    if news_rule.get("enabled") and negative_article:
         alerts.append(_alert("negative_news", f"New negative news was detected for {ticker}: {negative_article.get('title') or 'see recent news'}.", sentiment, negative_threshold, "news_articles"))
 
     earnings_rule = active_rules.get("earnings") or {}

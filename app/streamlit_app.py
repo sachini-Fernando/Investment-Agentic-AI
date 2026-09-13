@@ -196,6 +196,31 @@ def render_sidebar():
         "liquidity_need": liquidity_need,
     }
 
+    with st.sidebar.expander("🚨 Alerts", expanded=False):
+        price_alert_enabled = st.checkbox("Price target", value=False)
+        price_target = st.number_input("Target price", min_value=0.0, value=0.0, step=1.0, disabled=not price_alert_enabled)
+        price_direction = st.selectbox("Trigger when price is", ["above", "below"], disabled=not price_alert_enabled)
+        rsi_alert_enabled = st.checkbox("RSI threshold", value=True)
+        rsi_overbought = st.number_input("Overbought RSI", min_value=50.0, max_value=100.0, value=70.0, step=1.0, disabled=not rsi_alert_enabled)
+        rsi_oversold = st.number_input("Oversold RSI", min_value=0.0, max_value=50.0, value=30.0, step=1.0, disabled=not rsi_alert_enabled)
+        large_move_enabled = st.checkbox("Large price movement", value=True)
+        large_move_threshold = st.number_input("Movement threshold (%)", min_value=0.1, value=5.0, step=0.5, disabled=not large_move_enabled)
+        negative_news_enabled = st.checkbox("Negative news", value=True)
+        negative_news_threshold = st.number_input("Negative sentiment threshold", min_value=-1.0, max_value=0.0, value=-0.5, step=0.1, disabled=not negative_news_enabled)
+        earnings_enabled = st.checkbox("Earnings announcement", value=True)
+        earnings_lookahead = st.number_input("Earnings lookahead (days)", min_value=0, max_value=90, value=7, step=1, disabled=not earnings_enabled)
+        allocation_enabled = st.checkbox("Portfolio allocation limit", value=True)
+        allocation_limit = st.number_input("Maximum ticker allocation (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0, disabled=not allocation_enabled) / 100
+
+    alert_rules = {
+        "price_target": {"enabled": price_alert_enabled, "target": price_target, "direction": price_direction},
+        "rsi": {"enabled": rsi_alert_enabled, "overbought": rsi_overbought, "oversold": rsi_oversold},
+        "large_move": {"enabled": large_move_enabled, "threshold_percent": large_move_threshold},
+        "negative_news": {"enabled": negative_news_enabled, "threshold": negative_news_threshold, "lookback_days": 3},
+        "earnings": {"enabled": earnings_enabled, "lookahead_days": earnings_lookahead, "lookback_days": 3},
+        "portfolio_allocation": {"enabled": allocation_enabled, "limit": allocation_limit},
+    }
+
     with st.sidebar.expander("⚙️ Advanced Options"):
         use_conditional = st.checkbox(
             "Use Conditional Routing",
@@ -208,7 +233,7 @@ def render_sidebar():
         use_container_width=True,
     )
 
-    return ticker, use_conditional, investor_profile, analyze_button
+    return ticker, use_conditional, investor_profile, alert_rules, analyze_button
 
 
 def render_question_chat():
@@ -257,6 +282,27 @@ def render_portfolio_fit(state):
     else:
         st.success("This proposed weight is within the app's 10% single-company educational guardrail.")
     st.caption("Educational planning aid only. Consider your full finances, taxes, and professional advice before acting.")
+
+
+def render_alerts(state):
+    """Render triggered market and portfolio alerts for the completed analysis."""
+    section_title("shield", "Alerts", "red", "Signals triggered by the thresholds you selected")
+    alerts = state.get("alerts") or []
+    if not alerts:
+        st.success("No configured alerts were triggered by the available data.")
+        return
+
+    st.warning(f"{len(alerts)} alert(s) triggered for {state.get('ticker', 'this ticker')}.")
+    for alert in alerts:
+        message = alert.get("message", "Alert triggered")
+        if alert.get("severity") == "critical":
+            st.error(message)
+        else:
+            st.warning(message)
+        st.caption(
+            f"Type: {alert.get('type', 'unknown')} | Source: {alert.get('source', 'unknown')} | "
+            f"Triggered: {alert.get('triggered_at', 'N/A')}"
+        )
 
 
 def render_stock_data(state):
@@ -915,6 +961,7 @@ def render_analysis_page(state):
         "📈 Technical": render_technical_indicators,
         "🎯 Recommendation": render_recommendation,
         "🧩 Portfolio Fit": render_portfolio_fit,
+        "🚨 Alerts": render_alerts,
         "🔮 Forecast": render_price_forecast,
         "🛡️ Risk": render_risk_metrics,
         "🕓 History": lambda current_state: render_beginner_history(),
@@ -938,7 +985,7 @@ def main():
     if "last_ticker" not in st.session_state:
         st.session_state.last_ticker = None
 
-    ticker, use_conditional, investor_profile, analyze_button = render_sidebar()
+    ticker, use_conditional, investor_profile, alert_rules, analyze_button = render_sidebar()
     user_query, chat_submitted = render_question_chat()
     analyze_button = analyze_button or chat_submitted
 
@@ -951,6 +998,7 @@ def main():
                     use_conditional=use_conditional,
                     use_mongodb=True,
                     investor_profile=investor_profile,
+                    alert_rules=alert_rules,
                 )
 
                 st.session_state.analysis_result = result
