@@ -19,8 +19,16 @@ sys.path.insert(0, str(project_root))
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
 from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
+from src.utils.security import (
+    AuthenticationError,
+    SessionManager,
+    UserDirectory,
+    audit_event,
+)
 
 assets_dir = Path(__file__).parent / "assets"
+_USERS = UserDirectory()
+_SESSIONS = SessionManager()
 
 
 # Page configuration
@@ -95,6 +103,41 @@ def load_theme():
             f"<style>{css_path.read_text(encoding='utf-8')}</style>",
             unsafe_allow_html=True,
         )
+
+
+def require_authenticated_user() -> str:
+    """Render sign-in/registration and stop the app until a session exists."""
+    token = st.session_state.get("session_token")
+    if token:
+        try:
+            return _SESSIONS.user_for(token)
+        except AuthenticationError:
+            st.session_state.pop("session_token", None)
+
+    st.title("Sign in to InvestSage")
+    st.caption("Your analysis history is private to your account.")
+    users_exist = bool(_USERS._read())
+    mode = st.radio("Account", ["Sign in", "Create account"] if not users_exist else ["Sign in"], horizontal=True)
+    with st.form("authentication"):
+        user_id = st.text_input("User ID")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(mode)
+    if submitted:
+        try:
+            if mode == "Create account":
+                _USERS.register(user_id, password)
+                audit_event("register", user_id.strip().lower(), "success")
+            if not _USERS.authenticate(user_id, password):
+                raise AuthenticationError("Invalid user ID or password.")
+            normalized = user_id.strip().lower()
+            st.session_state.session_token = _SESSIONS.create(normalized)
+            st.session_state.user_id = normalized
+            audit_event("login", normalized, "success")
+            st.rerun()
+        except (AuthenticationError, ValueError) as exc:
+            audit_event("login", user_id.strip().lower(), "failure")
+            st.error(str(exc))
+    st.stop()
 
 
 def render_header():
@@ -719,7 +762,10 @@ def render_execution_info(state):
 
 def load_analysis_history(ticker=None, limit=10):
     """Load analysis history from MongoDB only."""
-    history = load_persistent_history(allow_local_fallback=False)
+    history = load_persistent_history(
+        allow_local_fallback=False,
+        user_id=st.session_state.get("user_id"),
+    )
     if ticker:
         history = [item for item in history if item.get("ticker") == ticker.upper()]
     return history[:limit]
@@ -978,6 +1024,7 @@ def render_analysis_page(state):
 def main():
     """Main Streamlit application."""
     load_theme()
+    user_id = require_authenticated_user()
     render_header()
 
     if "analysis_result" not in st.session_state:
@@ -997,14 +1044,15 @@ def main():
                     user_query=user_query if user_query else None,
                     use_conditional=use_conditional,
                     use_mongodb=True,
-                    investor_profile=investor_profile,
+                    investor_profile={**investor_profile, "user_id": user_id},
                     alert_rules=alert_rules,
                 )
+                result["user_id"] = user_id
 
                 st.session_state.analysis_result = result
                 st.session_state.last_ticker = ticker
                 try:
-                    save_analysis_summary(result, allow_local_fallback=False)
+                    save_analysis_summary(result, allow_local_fallback=False, user_id=user_id)
                     st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
                 except OSError as history_error:
                     logger.error(f"Unable to save MongoDB history: {history_error}")
@@ -1017,6 +1065,7 @@ def main():
 
     render_beginner_recent_analyses()
     render_beginner_guide()
+    st.caption("Educational research only. This application does not provide financial advice, place trades, or connect to a broker. Review all data independently.")
 
     if st.session_state.analysis_result:
         state = st.session_state.analysis_result

@@ -93,6 +93,37 @@ class SessionManager:
 
 
 @dataclass
+class UserDirectory:
+    """Small file-backed user registry storing only password hashes."""
+
+    path: Path = field(default_factory=lambda: Path(os.getenv("AUTH_USERS_FILE", "data/users.json")))
+
+    def _read(self) -> Dict[str, str]:
+        if not self.path.exists():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def register(self, user_id: str, password: str) -> None:
+        normalized = user_id.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,63}", normalized):
+            raise ValueError("User ID must be 3-64 characters using letters, numbers, '.', '_' or '-'.")
+        users = self._read()
+        if normalized in users:
+            raise ValueError("User already exists.")
+        users[normalized] = hash_password(password)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+    def authenticate(self, user_id: str, password: str) -> bool:
+        encoded = self._read().get(user_id.strip().lower())
+        return bool(encoded and verify_password(password, encoded))
+
+
+@dataclass
 class SlidingWindowRateLimiter:
     """Thread-safe per-provider limiter for outbound API calls."""
 

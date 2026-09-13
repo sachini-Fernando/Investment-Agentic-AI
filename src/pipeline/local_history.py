@@ -58,12 +58,13 @@ def _mongodb_history_collection():
         return None
 
 
-def load_persistent_history(path: Optional[Path] = None, allow_local_fallback: bool = True) -> List[Dict[str, Any]]:
+def load_persistent_history(path: Optional[Path] = None, allow_local_fallback: bool = True, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Load MongoDB history, optionally falling back to the local JSON file."""
     collection = _mongodb_history_collection()
     if collection is not None:
         try:
-            records = list(collection.find({}, {"_id": 0}).sort("saved_at", -1).limit(MAX_HISTORY_ITEMS))
+            query = {"user_id": user_id} if user_id else {}
+            records = list(collection.find(query, {"_id": 0}).sort("saved_at", -1).limit(MAX_HISTORY_ITEMS))
             if records:
                 return records
         except Exception as exc:
@@ -88,6 +89,7 @@ def save_analysis_summary(
     state: Dict[str, Any],
     path: Optional[Path] = None,
     allow_local_fallback: bool = True,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a compact history record, optionally allowing local fallback."""
     history_file = _history_path(path)
@@ -105,6 +107,7 @@ def save_analysis_summary(
         "direct_answer": state.get("direct_answer") or "No direct answer was available.",
         "risk_factors": [str(item) for item in (state.get("risk_factors") or [])][:3],
         "question": state.get("user_query") or "General stock review",
+        "user_id": user_id or state.get("user_id"),
     }
     if not record["ticker"]:
         raise ValueError("A ticker is required to save analysis history.")
@@ -113,7 +116,7 @@ def save_analysis_summary(
     if collection is not None:
         try:
             collection.replace_one(
-                {"analysis_id": record["analysis_id"]},
+                {"analysis_id": record["analysis_id"], "user_id": record["user_id"]},
                 record,
                 upsert=True,
             )
@@ -124,7 +127,11 @@ def save_analysis_summary(
     if not allow_local_fallback:
         raise RuntimeError("MongoDB is required for analysis history, but it is not available.")
 
-    records = [item for item in load_local_history(history_file) if item.get("ticker") != record["ticker"]]
+    records = [
+        item for item in load_local_history(history_file)
+        if not user_id or item.get("user_id") == user_id
+        if item.get("ticker") != record["ticker"]
+    ]
     records.insert(0, record)
     history_file.parent.mkdir(parents=True, exist_ok=True)
     temporary_file = history_file.with_suffix(".tmp")
