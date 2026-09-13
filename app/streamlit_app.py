@@ -1,4 +1,3 @@
-
 """
 Streamlit UI for the Investment Agentic AI system.
 Provides an interactive dashboard for investment analysis.

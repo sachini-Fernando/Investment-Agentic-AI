@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import time
 from statistics import median
 from dataclasses import dataclass
 from datetime import datetime, timezone
