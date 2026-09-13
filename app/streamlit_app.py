@@ -29,7 +29,9 @@ from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
 from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
 from src.tools.portfolio_tools import (  # noqa: E402
+    calculate_portfolio_volatility,
     calculate_portfolio_summary,
+    calculate_stress_scenarios,
     load_portfolio,
     save_portfolio,
     suggest_rebalancing,
@@ -480,6 +482,7 @@ def render_portfolio_manager(_state=None):
                 current_price = st.number_input("Current price", min_value=0.0, step=0.01, format="%.2f")
                 dividend_per_share = st.number_input("Dividend per share", min_value=0.0, step=0.01, format="%.4f")
                 total_dividends = st.number_input("Total dividends received", min_value=0.0, step=0.01, format="%.2f")
+                annual_volatility = st.number_input("Annual volatility (%)", min_value=0.0, max_value=500.0, value=0.0, step=1.0, format="%.1f")
             submitted = st.form_submit_button("Add holding", type="primary", use_container_width=True)
 
         if submitted:
@@ -498,6 +501,7 @@ def render_portfolio_manager(_state=None):
                     "current_price": current_price,
                     "dividend_per_share": dividend_per_share,
                     "total_dividends": total_dividends or shares * dividend_per_share,
+                    "annual_volatility": annual_volatility / 100,
                 })
                 save_portfolio(user_id, holdings)
                 log_audit_event(user_id, "portfolio_holding_added", {"ticker": holding_ticker}, "success")
@@ -515,6 +519,24 @@ def render_portfolio_manager(_state=None):
         metric_col3.metric("Total return", f"${summary['total_return']:,.2f}", f"{summary['return_percent']:.1%}")
         metric_col4.metric("Dividends", f"${summary['total_dividends']:,.2f}")
         metric_col5.metric("Holdings", len(summary["holdings"]))
+
+        portfolio_volatility = calculate_portfolio_volatility(summary["holdings"])
+        if portfolio_volatility is None:
+            st.info("Add annual volatility for each holding to calculate portfolio-level volatility.")
+        else:
+            st.metric("Portfolio volatility", f"{portfolio_volatility:.2%}")
+
+        st.markdown("**Stress testing**")
+        stress_rows = [
+            {
+                "Scenario": item["scenario"],
+                "Estimated change": f"${item['estimated_change']:,.2f}",
+                "Estimated change %": f"{item['estimated_change_percent']:.2%}",
+                "Estimated portfolio value": f"${item['estimated_value']:,.2f}",
+            }
+            for item in calculate_stress_scenarios(summary["holdings"])
+        ]
+        st.dataframe(stress_rows, use_container_width=True, hide_index=True)
 
         display_rows = [
             {

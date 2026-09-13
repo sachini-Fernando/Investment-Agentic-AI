@@ -1,5 +1,7 @@
 from src.tools.portfolio_tools import (
     build_portfolio_insights,
+    calculate_stress_scenarios,
+    calculate_portfolio_volatility,
     calculate_portfolio_summary,
     load_portfolio,
     save_portfolio,
@@ -51,6 +53,47 @@ def test_portfolio_summary_calculates_return_dividends_and_allocations():
     assert summary["total_return"] == 220
     assert summary["company_allocations"]["AAPL"] == 1200 / 2200
     assert summary["asset_type_allocations"]["Stocks"] == 1200 / 2200
+
+
+def test_portfolio_volatility_uses_weighted_holding_volatility_fallback():
+    volatility = calculate_portfolio_volatility([
+        {"ticker": "AAPL", "shares": 1, "current_price": 75, "annual_volatility": 0.20},
+        {"ticker": "BND", "shares": 1, "current_price": 25, "annual_volatility": 0.08},
+    ])
+
+    expected = ((0.75 * 0.20) ** 2 + (0.25 * 0.08) ** 2) ** 0.5
+    assert volatility == expected
+
+
+def test_portfolio_volatility_annualizes_historical_returns():
+    volatility = calculate_portfolio_volatility([
+        {"ticker": "AAPL", "shares": 1, "current_price": 100, "historical_returns": [0.01, -0.01, 0.02, -0.02]},
+        {"ticker": "BND", "shares": 1, "current_price": 100, "historical_returns": [0.005, 0.0, 0.005, 0.0]},
+    ])
+
+    portfolio_returns = [0.0075, -0.005, 0.0125, -0.01]
+    expected = __import__("statistics").stdev(portfolio_returns) * (252 ** 0.5)
+    assert volatility == expected
+
+
+def test_stress_scenarios_apply_asset_specific_shocks():
+    scenarios = calculate_stress_scenarios([
+        {"ticker": "AAPL", "asset_type": "Stocks", "shares": 1, "current_price": 100},
+        {"ticker": "BND", "asset_type": "Bonds", "shares": 1, "current_price": 100},
+        {"ticker": "CASH", "asset_type": "Cash", "shares": 1, "current_price": 100},
+    ])
+    by_name = {item["scenario"]: item for item in scenarios}
+
+    assert set(by_name) == {
+        "Market falls 10%",
+        "Interest rates increase",
+        "Company earnings decline",
+        "Negative news appears",
+    }
+    assert by_name["Market falls 10%"]["estimated_change"] == -13.0
+    assert by_name["Interest rates increase"]["estimated_change"] == -7.0
+    assert by_name["Company earnings decline"]["estimated_change"] == -8.0
+    assert by_name["Negative news appears"]["estimated_change"] == -6.0
 
 
 def test_concentration_and_rebalancing_suggestions_are_transparent():
