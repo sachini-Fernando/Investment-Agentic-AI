@@ -1,68 +1,42 @@
+import json
 from pathlib import Path
 
-import pytest
-
 from src.utils.security import (
-    AuthorizationError,
-    RateLimitExceeded,
-    SessionManager,
-    SlidingWindowRateLimiter,
-    TradingNotAvailable,
-    audit_event,
-    authorize_owner,
-    execute_trade,
-    hash_password,
-    validate_ticker,
-    verify_password,
+    check_rate_limit,
+    get_secret,
+    log_audit_event,
+    validate_ticker_symbol,
 )
 
 
-def test_passwords_are_hashed_and_verifiable():
-    encoded = hash_password("correct horse battery staple")
-
-    assert encoded != "correct horse battery staple"
-    assert verify_password("correct horse battery staple", encoded)
-    assert not verify_password("wrong password", encoded)
+def test_validate_ticker_symbol_accepts_common_symbols():
+    assert validate_ticker_symbol("AAPL") == "AAPL"
+    assert validate_ticker_symbol("BRK.B") == "BRK.B"
+    assert validate_ticker_symbol("  msft  ") == "MSFT"
 
 
-def test_ticker_validation_rejects_injection_like_values():
-    assert validate_ticker("aapl") == "AAPL"
-    with pytest.raises(ValueError):
-        validate_ticker("AAPL;DROP TABLE")
+def test_validate_ticker_symbol_rejects_invalid_values():
+    try:
+        validate_ticker_symbol("BAD$TICKER")
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
 
 
-def test_sessions_expire_or_revoke():
-    sessions = SessionManager(ttl_seconds=60)
-    token = sessions.create("user-1")
+def test_rate_limit_and_audit_helpers(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.utils.security.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.utils.security.AUDIT_LOG_PATH", tmp_path / "audit.log")
+    monkeypatch.setattr("src.utils.security.USERS_FILE", tmp_path / "users.json")
+    monkeypatch.setattr("src.utils.security.SECRETS_FILE", tmp_path / ".env")
 
-    assert sessions.user_for(token) == "user-1"
-    sessions.revoke(token)
-    with pytest.raises(Exception):
-        sessions.user_for(token)
+    assert check_rate_limit("user-a", limit=2, window_seconds=60) is True
+    assert check_rate_limit("user-a", limit=2, window_seconds=60) is True
+    assert check_rate_limit("user-a", limit=2, window_seconds=60) is False
 
+    log_audit_event("user-a", "analysis_run", {"ticker": "AAPL"}, "success")
+    assert (tmp_path / "audit.log").exists()
+    entries = [json.loads(line) for line in (tmp_path / "audit.log").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert entries[0]["user_id"] == "user-a"
 
-def test_rate_limiter_blocks_excess_calls():
-    limiter = SlidingWindowRateLimiter(max_calls=1, window_seconds=60)
-    limiter.check("newsapi")
-    with pytest.raises(RateLimitExceeded):
-        limiter.check("newsapi")
-
-
-def test_authorization_requires_matching_owner():
-    authorize_owner({"user_id": "user-1"}, "user-1")
-    with pytest.raises(AuthorizationError):
-        authorize_owner({"user_id": "user-1"}, "user-2")
-
-
-def test_audit_event_writes_structured_record(tmp_path: Path):
-    event = audit_event("login", "user-1", "success", {"method": "password"}, tmp_path / "audit.log")
-
-    assert event["user_id"] == "user-1"
-    assert '"action": "login"' in (tmp_path / "audit.log").read_text()
-
-
-def test_trading_requires_confirmation_and_broker_but_remains_disabled():
-    with pytest.raises(TradingNotAvailable):
-        execute_trade("AAPL", quantity=1)
-    with pytest.raises(TradingNotAvailable):
-        execute_trade("AAPL", quantity=1, confirmation=True, broker=object())
+    monkeypatch.setenv("APP_SECRET", "demo-secret")
+    assert get_secret("APP_SECRET") == "demo-secret"

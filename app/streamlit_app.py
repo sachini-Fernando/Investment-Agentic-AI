@@ -11,6 +11,15 @@ import plotly.graph_objects as go
 import streamlit as st
 from loguru import logger
 
+from src.utils.security import (
+    authenticate_user,
+    check_rate_limit,
+    ensure_default_user,
+    get_secret,
+    log_audit_event,
+    validate_ticker_symbol,
+)
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -18,16 +27,8 @@ sys.path.insert(0, str(project_root))
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
 from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
-from src.utils.security import (
-    AuthenticationError,
-    SessionManager,
-    UserDirectory,
-    audit_event,
-)
 
 assets_dir = Path(__file__).parent / "assets"
-_USERS = UserDirectory()
-_SESSIONS = SessionManager()
 
 
 # Page configuration
@@ -104,39 +105,141 @@ def load_theme():
         )
 
 
-def require_authenticated_user() -> str:
-    """Render sign-in/registration and stop the app until a session exists."""
-    token = st.session_state.get("session_token")
-    if token:
-        try:
-            return _SESSIONS.user_for(token)
-        except AuthenticationError:
-            st.session_state.pop("session_token", None)
+def render_sign_in_dialog():
+    """Open a modal sign-in form when the user wants to authenticate."""
+    if st.session_state.get("authenticated"):
+        return
 
-    st.title("Sign in to InvestSage")
-    st.caption("Your analysis history is private to your account.")
-    users_exist = bool(_USERS._read())
-    mode = st.radio("Account", ["Sign in", "Create account"] if not users_exist else ["Sign in"], horizontal=True)
-    with st.form("authentication"):
-        user_id = st.text_input("User ID")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button(mode)
-    if submitted:
-        try:
-            if mode == "Create account":
-                _USERS.register(user_id, password)
-                audit_event("register", user_id.strip().lower(), "success")
-            if not _USERS.authenticate(user_id, password):
-                raise AuthenticationError("Invalid user ID or password.")
-            normalized = user_id.strip().lower()
-            st.session_state.session_token = _SESSIONS.create(normalized)
-            st.session_state.user_id = normalized
-            audit_event("login", normalized, "success")
-            st.rerun()
-        except (AuthenticationError, ValueError) as exc:
-            audit_event("login", user_id.strip().lower(), "failure")
-            st.error(str(exc))
-    st.stop()
+    if st.sidebar.button("Sign in", key="open_signin_modal"):
+        st.session_state.show_signin_modal = True
+
+    if st.session_state.get("show_signin_modal"):
+        @st.dialog("Sign in")
+        def sign_in_modal():
+            st.caption("Access your private analysis workspace")
+            with st.form("sign_in_form"):
+                username = st.text_input("Username", value="demo")
+                password = st.text_input("Password", type="password", value="invest123")
+                submitted = st.form_submit_button("Continue")
+
+            if submitted:
+                if not authenticate_user(username, password):
+                    st.error("Invalid username or password.")
+                    log_audit_event(username, "login", {"source": "streamlit"}, "failure")
+                    return
+
+                st.session_state.user_id = username
+                st.session_state.authenticated = True
+                st.session_state.show_signin_modal = False
+                log_audit_event(username, "login", {"source": "streamlit"}, "success")
+                st.rerun()
+
+        sign_in_modal()
+
+    st.sidebar.info("Sign in to unlock your private analyses and account-scoped history.")
+
+
+def render_user_profile_panel():
+    """Show the current account details and controls in the sidebar."""
+    if not st.session_state.get("authenticated"):
+        return
+
+    user_id = st.session_state.get("user_id", "user")
+    history_count = len(load_analysis_history(limit=50, user_id=user_id))
+
+    st.sidebar.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, rgba(200,92,61,0.10), rgba(86,123,118,0.10));
+            border: 1px solid rgba(38,37,32,0.10);
+            border-radius: 18px;
+            padding: 0.9rem 0.95rem 0.8rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 10px 30px rgba(55,48,38,0.06);
+        ">
+            <div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:0.65rem;">
+                <div style="width:2.25rem;height:2.25rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;color:#252421;border:1px solid rgba(38,37,32,0.12);font-weight:700;">
+                    {initial}
+                </div>
+                <div>
+                    <div style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:#6f6c64;">Investor profile</div>
+                    <div style="font-size:1.1rem;font-weight:700;color:#252421;">{user_id}</div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;margin-bottom:0.7rem;">
+                <div style="background: rgba(255,255,255,0.60); border:1px solid rgba(38,37,32,0.08); border-radius: 12px; padding: 0.5rem 0.55rem;">
+                    <div style="font-size:0.7rem; color:#6f6c64; text-transform:uppercase; letter-spacing:0.06em;">History</div>
+                    <div style="font-size:1.05rem; font-weight:700; color:#252421;">{history_count}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.60); border:1px solid rgba(38,37,32,0.08); border-radius: 12px; padding: 0.5rem 0.55rem;">
+                    <div style="font-size:0.7rem; color:#6f6c64; text-transform:uppercase; letter-spacing:0.06em;">Mode</div>
+                    <div style="font-size:0.92rem; font-weight:700; color:#252421;">Private</div>
+                </div>
+            </div>
+            <div style="padding:0.55rem 0.65rem;border-radius:12px;background:rgba(255,255,255,0.45);border:1px solid rgba(38,37,32,0.08);">
+                <div style="font-size:0.7rem; color:#6f6c64; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.2rem;">Trade acknowledgement</div>
+                <div style="font-size:0.8rem; color:#252421; line-height:1.35;">
+                    {confirmation_status}
+                </div>
+            </div>
+        </div>
+        """.format(
+            initial=user_id[:1].upper(),
+            user_id=user_id,
+            history_count=history_count,
+            confirmation_status="Confirmed" if st.session_state.get("trade_confirmed") else "Awaiting confirmation",
+        ),
+        unsafe_allow_html=True,
+    )
+
+    if st.sidebar.button("Review confirmation", use_container_width=True, type="secondary", key="profile_trade_review_button"):
+        st.session_state.show_trade_modal = True
+
+    if st.sidebar.button("Sign out", use_container_width=True, type="secondary"):
+        st.session_state.pop("authenticated", None)
+        st.session_state.pop("user_id", None)
+        st.session_state.pop("trade_confirmed", None)
+        st.rerun()
+
+
+def render_trade_confirmation_dialog():
+    """Render a modal confirmation box before the user can proceed with trade-related actions."""
+    if st.session_state.get("trade_confirmed"):
+        st.success("Trade confirmation acknowledged.")
+        return
+
+    trigger_key = "trade_confirm_button"
+    if st.button("Review educational disclaimer", key=trigger_key):
+        st.session_state.show_trade_modal = True
+
+    if st.session_state.get("show_trade_modal"):
+        @st.dialog("Educational Disclaimer & Trade Confirmation")
+        def disclaimer_modal():
+            st.warning(
+                "This dashboard provides educational market research only. "
+                "It does not execute trades, connect to a broker, or provide investment advice. "
+                "Any real trade requires your explicit confirmation and a separate broker integration."
+            )
+            st.write("By continuing, you acknowledge that:")
+            st.markdown(
+                "- This tool is for research and learning only\n"
+                "- No automated trade execution is enabled\n"
+                "- You remain responsible for all investment decisions\n"
+                "- A broker and your explicit authorization are required before any live trade"
+            )
+            confirmed = st.checkbox("I understand and confirm that no trade will be executed automatically.")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("Confirm", disabled=not confirmed, type="primary"):
+                    st.session_state.trade_confirmed = True
+                    st.session_state.show_trade_modal = False
+                    st.rerun()
+            with col2:
+                if st.button("Cancel"):
+                    st.session_state.show_trade_modal = False
+                    st.rerun()
+
+        disclaimer_modal()
 
 
 def render_header():
@@ -179,6 +282,11 @@ def render_header():
 
 def render_sidebar():
     """Renders the sidebar with input controls."""
+    render_sign_in_dialog()
+
+    if st.session_state.get("authenticated"):
+        render_user_profile_panel()
+
     st.sidebar.markdown(
         f"""
         <div class="section-title">
@@ -209,13 +317,22 @@ def render_sidebar():
         help="Choose a common investment or select Custom ticker to enter another symbol.",
     )
     if ticker_options[selected_ticker] == "CUSTOM":
-        ticker = st.sidebar.text_input(
-            "Custom ticker symbol",
-            placeholder="e.g., NFLX, BABA, CSE.N0000",
-            help="Enter the exchange ticker used by Yahoo Finance.",
-        ).upper().strip()
+        try:
+            ticker = validate_ticker_symbol(
+                st.sidebar.text_input(
+                    "Custom ticker symbol",
+                    placeholder="e.g., NFLX, BABA, CSE.N0000",
+                    help="Enter the exchange ticker used by Yahoo Finance.",
+                )
+            )
+        except ValueError as exc:
+            st.sidebar.error(str(exc))
+            ticker = ""
     else:
         ticker = ticker_options[selected_ticker]
+        st.sidebar.caption(f"Selected: **{ticker}**")
+
+    if ticker:
         st.sidebar.caption(f"Selected: **{ticker}**")
 
     with st.sidebar.expander("🎯 Your portfolio plan", expanded=True):
@@ -274,6 +391,12 @@ def render_sidebar():
         type="primary",
         use_container_width=True,
     )
+
+    st.sidebar.markdown("---")
+    st.sidebar.caption("API rate limit: 20 requests / 60s per user")
+    if not check_rate_limit(st.session_state.get("user_id", "guest"), limit=20, window_seconds=60):
+        st.sidebar.warning("Rate limit reached. Please wait before running another analysis.")
+        analyze_button = False
 
     return ticker, use_conditional, investor_profile, alert_rules, analyze_button
 
@@ -759,12 +882,10 @@ def render_execution_info(state):
                 st.error(error)
 
 
-def load_analysis_history(ticker=None, limit=10):
-    """Load analysis history from MongoDB only."""
-    history = load_persistent_history(
-        allow_local_fallback=False,
-        user_id=st.session_state.get("user_id"),
-    )
+def load_analysis_history(ticker=None, limit=10, user_id=None):
+    """Load analysis history from MongoDB only, scoped to the logged-in user."""
+    current_user = user_id or st.session_state.get("user_id")
+    history = load_persistent_history(allow_local_fallback=False, user_id=current_user)
     if ticker:
         history = [item for item in history if item.get("ticker") == ticker.upper()]
     return history[:limit]
@@ -775,7 +896,7 @@ def render_recent_analyses_summary(current_state=None):
     section_title("cpu", "Recent Analyses", "teal")
 
     try:
-        recent = load_analysis_history(limit=3)
+        recent = load_analysis_history(limit=3, user_id=st.session_state.get("user_id"))
     except Exception as exc:
         st.error(f"Unable to load recent analyses: {exc}")
         return
@@ -863,7 +984,7 @@ def render_analysis_history(ticker):
     ).upper().strip()
 
     try:
-        history = load_analysis_history(history_ticker if history_ticker else None, history_limit)
+        history = load_analysis_history(history_ticker if history_ticker else None, history_limit, user_id=st.session_state.get("user_id"))
     except Exception as exc:
         st.error(f"Unable to load history: {exc}")
         return
@@ -921,7 +1042,7 @@ def render_analysis_history(ticker):
 def render_beginner_recent_analyses():
     """Show automatic saved history with first-time-investor wording."""
     section_title("cpu", "Your Recent Analyses", "teal", "Saved automatically in MongoDB")
-    recent = load_analysis_history(limit=3)
+    recent = load_analysis_history(limit=3, user_id=st.session_state.get("user_id"))
     if not recent:
         st.info("Your first completed analysis will be saved here automatically. Choose a ticker and select Analyze Stock to begin.")
         return
@@ -939,14 +1060,14 @@ def render_beginner_recent_analyses():
 def render_beginner_history():
     """Provide a compact MongoDB-backed history view for new investors."""
     section_title("clock", "Your Past Analyses", "amber", "Compare your research without an account or database")
-    all_history = load_analysis_history(limit=50)
+    all_history = load_analysis_history(limit=50, user_id=st.session_state.get("user_id"))
     if not all_history:
         st.info("No saved analyses yet. Complete an analysis and it will appear here automatically.")
         return
 
     tickers = sorted({item.get("ticker") for item in all_history if item.get("ticker")})
     selection = st.selectbox("Show analyses for", ["All tickers"] + tickers, key="beginner_history_ticker")
-    history = all_history if selection == "All tickers" else load_analysis_history(selection, 10)
+    history = all_history if selection == "All tickers" else load_analysis_history(selection, 10, user_id=st.session_state.get("user_id"))
     st.caption("New analyses replace older entries for the same ticker, keeping this list clear and current.")
     for item in history:
         date = item.get("saved_at", "").replace("T", " ")[:16]
@@ -1023,13 +1144,6 @@ def render_analysis_page(state):
 def main():
     """Main Streamlit application."""
     load_theme()
-    user_id = require_authenticated_user()
-    if st.sidebar.button("Sign out"):
-        audit_event("logout", user_id, "success")
-        _SESSIONS.revoke(st.session_state.get("session_token", ""))
-        st.session_state.pop("session_token", None)
-        st.session_state.pop("user_id", None)
-        st.rerun()
     render_header()
 
     if "analysis_result" not in st.session_state:
@@ -1041,36 +1155,51 @@ def main():
     user_query, chat_submitted = render_question_chat()
     analyze_button = analyze_button or chat_submitted
 
+    if not st.session_state.get("authenticated"):
+        st.info("Please sign in to continue using the dashboard.")
+        st.stop()
+
     if analyze_button and ticker:
-        with st.spinner(f"Analyzing {ticker}... This may take a moment."):
-            try:
-                result = run_investment_analysis(
-                    ticker=ticker,
-                    user_query=user_query if user_query else None,
-                    use_conditional=use_conditional,
-                    use_mongodb=True,
-                    investor_profile={**investor_profile, "user_id": user_id},
-                    alert_rules=alert_rules,
-                )
-                result["user_id"] = user_id
+        if not st.session_state.get("trade_confirmed"):
+            st.warning("Please confirm the educational-only trade disclaimer before running an analysis.")
+            analyze_button = False
 
-                st.session_state.analysis_result = result
-                st.session_state.last_ticker = ticker
+        if analyze_button and not check_rate_limit(st.session_state.get("user_id", "guest"), limit=20, window_seconds=60):
+            st.warning("Rate limit reached. Please wait before another analysis run.")
+            analyze_button = False
+
+        if analyze_button:
+            with st.spinner(f"Analyzing {ticker}... This may take a moment."):
                 try:
-                    save_analysis_summary(result, allow_local_fallback=False, user_id=user_id)
-                    st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
-                except OSError as history_error:
-                    logger.error(f"Unable to save MongoDB history: {history_error}")
-                    st.success(f"Analysis completed for {ticker}!")
-                    st.error("The analysis could not be saved to MongoDB.")
+                    result = run_investment_analysis(
+                        ticker=ticker,
+                        user_query=user_query if user_query else None,
+                        use_conditional=use_conditional,
+                        use_mongodb=True,
+                        investor_profile=investor_profile,
+                        alert_rules=alert_rules,
+                        user_id=st.session_state.get("user_id"),
+                    )
 
-            except Exception as e:
-                st.error(f"Analysis failed: {str(e)}")
-                logger.error(f"Streamlit analysis error: {str(e)}")
+                    st.session_state.analysis_result = result
+                    st.session_state.last_ticker = ticker
+                    try:
+                        save_analysis_summary(result, allow_local_fallback=False, user_id=st.session_state.get("user_id"))
+                        log_audit_event(st.session_state.get("user_id"), "analysis_run", {"ticker": ticker, "user_query": user_query}, "success")
+                        st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
+                    except OSError as history_error:
+                        logger.error(f"Unable to save MongoDB history: {history_error}")
+                        st.success(f"Analysis completed for {ticker}!")
+                        st.error("The analysis could not be saved to MongoDB.")
 
+                except Exception as e:
+                    log_audit_event(st.session_state.get("user_id"), "analysis_run", {"ticker": ticker, "error": str(e)}, "failure")
+                    st.error(f"Analysis failed: {str(e)}")
+                    logger.error(f"Streamlit analysis error: {str(e)}")
+
+    render_trade_confirmation_dialog()
     render_beginner_recent_analyses()
     render_beginner_guide()
-    st.caption("Educational research only. This application does not provide financial advice, place trades, or connect to a broker. Review all data independently.")
 
     if st.session_state.analysis_result:
         state = st.session_state.analysis_result

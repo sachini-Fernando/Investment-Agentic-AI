@@ -5,6 +5,7 @@ class InvestmentState(TypedDict):
     # === INPUT ===
     analysis_id: Optional[str]
     ticker: str
+    user_id: Optional[str]
     user_query: Optional[str]
     investor_profile: Optional[Dict]
     portfolio_insights: Optional[Dict]
