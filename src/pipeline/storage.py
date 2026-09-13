@@ -165,6 +165,8 @@ class MongoPipelineStore:
             "stock_data": state.get("stock_data"),
             "historical_prices": state.get("historical_prices"),
             "company_info": state.get("company_info"),
+            "alert_rules": state.get("alert_rules"),
+            "alerts": state.get("alerts"),
             "financial_statements": state.get("financial_statements"),
             "news_articles": state.get("news_articles"),
             "search_results": state.get("search_results"),
