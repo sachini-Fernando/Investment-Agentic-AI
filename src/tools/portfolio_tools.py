@@ -4,8 +4,10 @@ These calculations are educational planning aids, not personalised financial adv
 """
 
 import json
+import math
 import os
 from pathlib import Path
+from statistics import stdev
 from typing import Any, Dict, List, Optional
 
 
@@ -36,6 +38,11 @@ def normalize_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
     cost_basis = shares * purchase_price
     current_value = shares * current_price
     total_return = current_value + total_dividends - cost_basis
+    historical_returns = holding.get("historical_returns", [])
+    if not isinstance(historical_returns, list):
+        historical_returns = []
+    historical_returns = [_number(value, float("nan")) for value in historical_returns]
+    historical_returns = [value for value in historical_returns if math.isfinite(value)]
     return {
         "ticker": str(holding.get("ticker", "")).strip().upper(),
         "company": str(holding.get("company") or holding.get("ticker", "")).strip(),
@@ -50,7 +57,37 @@ def normalize_holding(holding: Dict[str, Any]) -> Dict[str, Any]:
         "current_value": current_value,
         "total_return": total_return,
         "return_percent": total_return / cost_basis if cost_basis else 0.0,
+        "annual_volatility": max(0.0, _number(holding.get("annual_volatility"))),
+        "historical_returns": historical_returns,
     }
+
+
+def calculate_portfolio_volatility(holdings: List[Dict[str, Any]]) -> Optional[float]:
+    """Calculate annualized portfolio volatility as a decimal.
+
+    When all holdings provide equally sized ``historical_returns`` series, the
+    portfolio return series is calculated first and its sample standard
+    deviation is annualized using 252 trading days. Otherwise, the function
+    combines holding-level ``annual_volatility`` values assuming zero
+    correlation, which is a transparent fallback rather than a prediction.
+    """
+    normalized = [normalize_holding(item) for item in holdings if str(item.get("ticker", "")).strip()]
+    total_value = sum(item["current_value"] for item in normalized)
+    if not normalized or total_value <= 0:
+        return None
+
+    weights = [item["current_value"] / total_value for item in normalized]
+    histories = [item["historical_returns"] for item in normalized]
+    if histories and all(history and len(history) == len(histories[0]) for history in histories) and len(histories[0]) > 1:
+        portfolio_returns = [
+            sum(weight * history[index] for weight, history in zip(weights, histories))
+            for index in range(len(histories[0]))
+        ]
+        return stdev(portfolio_returns) * math.sqrt(252)
+
+    if any(item["annual_volatility"] > 0 for item in normalized):
+        return math.sqrt(sum((weight * item["annual_volatility"]) ** 2 for weight, item in zip(weights, normalized)))
+    return None
 
 
 def calculate_portfolio_summary(holdings: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -91,6 +128,7 @@ def calculate_portfolio_summary(holdings: List[Dict[str, Any]]) -> Dict[str, Any
         "largest_holding_weight": largest_weight,
         "concentration_status": "Review" if concentration_alerts else "Within guide",
         "concentration_alerts": concentration_alerts,
+        "portfolio_volatility": calculate_portfolio_volatility(normalized),
     }
 
 
