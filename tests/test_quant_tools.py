@@ -1,6 +1,11 @@
 import math
 
-from src.tools.quant_tools import calculate_risk_metrics, calculate_technical_indicators, perform_fundamental_analysis
+from src.tools.quant_tools import (
+    calculate_risk_metrics,
+    calculate_technical_indicators,
+    fallback_forecast,
+    perform_fundamental_analysis,
+)
 
 def _sample_prices():
     return [
@@ -24,6 +29,15 @@ def test_calculate_risk_metrics_returns_core_fields():
     assert "Sharpe_ratio" in metrics
     assert "VaR_95" in metrics
     assert math.isfinite(metrics["volatility"])
+
+
+def test_fallback_forecast_returns_prediction_path_for_ranges():
+    forecast = fallback_forecast(_sample_prices(), forecast_days=30)
+
+    assert len(forecast["all_forecasts"]) == 30
+    assert forecast["forecast_7d"] == forecast["all_forecasts"][6]
+    assert forecast["forecast_30d"] == forecast["all_forecasts"][-1]
+    assert min(forecast["all_forecasts"]) <= max(forecast["all_forecasts"])
 
 
 def test_fundamental_analysis_returns_complete_company_metrics():

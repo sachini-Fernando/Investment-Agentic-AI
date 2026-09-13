@@ -1012,6 +1012,43 @@ def render_price_forecast(state):
                     change_30d = ((forecast_30d - current_price) / current_price) * 100
                     st.metric("30-Day Forecast", f"${forecast_30d:.2f}", delta=f"{change_30d:.2f}%")
 
+            forecast_path = [
+                float(price)
+                for price in forecast.get("all_forecasts", [])
+                if price is not None
+            ]
+            if forecast_path:
+                seven_day_path = forecast_path[:7]
+                range_col1, range_col2 = st.columns(2)
+                with range_col1:
+                    st.metric(
+                        "7-Day Prediction Range",
+                        f"${min(seven_day_path):.2f} - ${max(seven_day_path):.2f}",
+                    )
+                with range_col2:
+                    st.metric(
+                        "30-Day Prediction Range",
+                        f"${min(forecast_path):.2f} - ${max(forecast_path):.2f}",
+                    )
+
+                figure = go.Figure()
+                figure.add_trace(
+                    go.Scatter(
+                        y=forecast_path,
+                        mode="lines",
+                        name="Predicted price",
+                        line={"color": "#2563eb", "width": 2},
+                    )
+                )
+                figure.update_layout(
+                    height=280,
+                    margin={"l": 0, "r": 0, "t": 20, "b": 0},
+                    xaxis_title="Forecast day",
+                    yaxis_title="Price ($)",
+                    showlegend=False,
+                )
+                st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
+
             if forecast.get("confidence"):
                 st.write(f"**Forecast Confidence:** {forecast['confidence']:.2%}")
     else:

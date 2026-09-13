@@ -5,3 +5,8 @@
 {"timestamp": "2026-09-13T14:44:46.959158+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
 {"timestamp": "2026-09-13T14:44:53.760249+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
 {"timestamp": "2026-09-13T15:04:23.837796+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-13T16:18:09.226350+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-13T16:20:43.035232+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
+{"timestamp": "2026-09-13T16:22:01.719359+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
+{"timestamp": "2026-09-13T16:34:33.219420+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-13T16:37:17.213230+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "give me forcasting report of all stocks availble"}, "outcome": "success"}
