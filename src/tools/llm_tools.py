@@ -54,6 +54,10 @@ def _safe_json_loads(text: str) -> Dict[str, Any]:
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
 
+    # Remove JavaScript-style comments that commonly appear in malformed LLM output.
+    cleaned = re.sub(r"//.*?$", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+
     # Extract JSON object using braces
     start = cleaned.find("{")
     end = cleaned.rfind("}")
@@ -138,7 +142,16 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # === 1. SENTIMENT ANALYSIS ===
     if sentiment is not None:
-        if sentiment > 0.25:
+        if sentiment >= 0.75:
+            score += 2
+            rationale.append(f"News sentiment is strongly positive at {sentiment:.2f}.")
+            decision_factors.append({
+                "signal": "sentiment",
+                "impact": "positive",
+                "evidence": f"{sentiment:.2f}",
+                "action": "Strong positive sentiment supports bullish outlook"
+            })
+        elif sentiment > 0.25:
             score += 1
             rationale.append(f"News sentiment is positive at {sentiment:.2f}.")
             decision_factors.append({
@@ -146,6 +159,15 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "impact": "positive",
                 "evidence": f"{sentiment:.2f}",
                 "action": "Positive sentiment supports bullish outlook"
+            })
+        elif sentiment <= -0.75:
+            score -= 2
+            rationale.append(f"News sentiment is strongly negative at {sentiment:.2f}.")
+            decision_factors.append({
+                "signal": "sentiment",
+                "impact": "negative",
+                "evidence": f"{sentiment:.2f}",
+                "action": "Strong negative sentiment suggests caution"
             })
         elif sentiment < -0.25:
             score -= 1
@@ -167,7 +189,16 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # === 2. TECHNICAL ANALYSIS ===
     if rsi is not None:
-        if rsi < 30:
+        if rsi <= 20:
+            score += 2
+            rationale.append(f"RSI at {rsi:.1f} suggests strongly oversold conditions.")
+            decision_factors.append({
+                "signal": "technical",
+                "impact": "positive",
+                "evidence": f"RSI={rsi:.1f}",
+                "action": "Strong oversold conditions may indicate a buying opportunity"
+            })
+        elif rsi < 30:
             score += 1
             rationale.append(f"RSI at {rsi:.1f} suggests oversold conditions.")
             decision_factors.append({
@@ -175,6 +206,15 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "impact": "positive",
                 "evidence": f"RSI={rsi:.1f}",
                 "action": "Oversold conditions may indicate a buying opportunity"
+            })
+        elif rsi >= 80:
+            score -= 2
+            rationale.append(f"RSI at {rsi:.1f} suggests strongly overbought conditions.")
+            decision_factors.append({
+                "signal": "technical",
+                "impact": "negative",
+                "evidence": f"RSI={rsi:.1f}",
+                "action": "Strong overbought conditions suggest caution"
             })
         elif rsi > 70:
             score -= 1
@@ -267,6 +307,8 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
         recommendation = "HOLD"
 
     confidence = min(0.95, 0.45 + (abs(score) * 0.15))
+    if abs(score) >= 2:
+        confidence = 0.95
     
     if not rationale:
         rationale.append("Insufficient strong signals for a high-conviction decision.")
@@ -335,24 +377,29 @@ class GeminiRecommendationEngine:
         self._model = None
         self._initialize_model()
 
-    def _initialize_model(self) -> None:
-        """Initialize the Gemini model with API key."""
+    def _build_model(self):
+        """Construct a configured Gemini model if credentials are available."""
         if not GEMINI_AVAILABLE:
             logger.warning("Gemini not available: missing google-generativeai package")
-            return
+            return None
 
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             logger.warning("Gemini not available: GOOGLE_API_KEY not set")
-            return
+            return None
 
         try:
             genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(self.model_name)
+            model = genai.GenerativeModel(self.model_name)
             logger.info(f"Gemini model initialized: {self.model_name}")
+            return model
         except Exception as e:
             logger.error(f"Failed to initialize Gemini: {e}")
-            self._model = None
+            return None
+
+    def _initialize_model(self) -> None:
+        """Initialize the Gemini model with API key."""
+        self._model = self._build_model()
 
     def is_available(self) -> bool:
         """Check if Gemini is available and configured."""
@@ -443,10 +490,10 @@ class GeminiRecommendationEngine:
         # Sentiment
         sentiment = payload.get('sentiment_score')
         if sentiment is not None:
-            prompt += f"SENTIMENT SCORE: {sentiment:.3f}\n"
+            prompt += f"Sentiment Score: {float(sentiment):.2f}\n"
         sentiment_conf = payload.get('sentiment_confidence')
         if sentiment_conf is not None:
-            prompt += f"SENTIMENT CONFIDENCE: {sentiment_conf:.2f}\n"
+            prompt += f"Sentiment Confidence: {float(sentiment_conf):.2f}\n"
         
         news_summary = payload.get('news_summary')
         if news_summary:
@@ -577,6 +624,9 @@ class GeminiRecommendationEngine:
             
             # Parse response
             parsed = self._parse_gemini_response(raw_text)
+            if not parsed:
+                logger.warning("Gemini response empty or invalid; using heuristic fallback")
+                return _heuristic_synthesis(payload)
             
             # Validate and build result
             result = {

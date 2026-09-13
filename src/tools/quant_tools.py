@@ -46,7 +46,7 @@ except ImportError:
     logger.warning("ML models not available. Using fallback forecasting.")
 
 
-def _prepare_prices_dataframe(prices: List[Dict]) -> pd.DataFrame:
+def _prepare_prices_dataframe(prices: List[Dict[str, Any]]) -> Any:
     df = pd.DataFrame(prices or []).copy()
     if df.empty:
         return df
@@ -557,8 +557,10 @@ def perform_fundamental_analysis(company_info: Dict, financial_statements: Dict)
         logger.info("Performing fundamental analysis")
         
         analysis = {}
+        revenue = None
+        net_income = None
         
-        # P/E Analysis
+        # Valuation and shareholder-return metrics.
         pe_ratio = company_info.get('pe_ratio')
         if pe_ratio:
             analysis['pe_analysis'] = {'current_pe': pe_ratio}
@@ -574,12 +576,21 @@ def perform_fundamental_analysis(company_info: Dict, financial_statements: Dict)
         if peg_ratio:
             analysis['peg_analysis'] = {'current_peg': peg_ratio}
             analysis['peg_analysis']['interpretation'] = 'Good value' if peg_ratio < 1 else 'Overvalued' if peg_ratio > 2 else 'Fair value'
+
+        analysis['valuation_metrics'] = {
+            'pe_ratio': pe_ratio,
+            'peg_ratio': peg_ratio,
+            'price_to_book': company_info.get('pb_ratio'),
+            'dividend_yield': company_info.get('dividend_yield'),
+            'dividend_rate': company_info.get('dividend_rate'),
+            'payout_ratio': company_info.get('payout_ratio'),
+        }
         
         # Profitability Analysis
         income_stmt = financial_statements.get('income_statement', {})
         if income_stmt:
-            revenue = income_stmt.get('total_revenue', 0)
-            net_income = income_stmt.get('net_income', 0)
+            revenue = income_stmt.get('total_revenue') or 0
+            net_income = income_stmt.get('net_income') or 0
             
             if revenue > 0:
                 analysis['profitability'] = {
@@ -594,13 +605,23 @@ def perform_fundamental_analysis(company_info: Dict, financial_statements: Dict)
                     analysis['profitability']['rating'] = 'Good'
                 else:
                     analysis['profitability']['rating'] = 'Poor'
+
+        analysis['growth_metrics'] = {
+            'revenue_growth': company_info.get('quarterly_revenue_growth'),
+            'earnings_growth': company_info.get('earnings_growth'),
+            'net_margin': (
+                net_income / revenue
+                if revenue and net_income is not None and revenue > 0
+                else None
+            ),
+        }
         
         # Balance Sheet Health
         balance_sheet = financial_statements.get('balance_sheet', {})
         if balance_sheet:
-            total_assets = balance_sheet.get('total_assets', 0)
-            total_liabilities = balance_sheet.get('total_liabilities', 0)
-            shareholders_equity = balance_sheet.get('shareholders_equity', 0)
+            total_assets = balance_sheet.get('total_assets') or 0
+            total_liabilities = balance_sheet.get('total_liabilities') or 0
+            shareholders_equity = balance_sheet.get('shareholders_equity') or 0
             
             if total_assets > 0:
                 debt_to_equity = total_liabilities / shareholders_equity if shareholders_equity > 0 else 0
@@ -616,10 +637,12 @@ def perform_fundamental_analysis(company_info: Dict, financial_statements: Dict)
                     analysis['balance_sheet']['health'] = 'Moderate'
                 else:
                     analysis['balance_sheet']['health'] = 'Weak'
+
+                analysis['balance_sheet']['debt_to_equity'] = debt_to_equity
         
         # DCF Valuation (simplified)
         if income_stmt and (cash_flow := financial_statements.get('cash_flow', {})):
-            free_cash_flow = cash_flow.get('free_cash_flow', 0)
+            free_cash_flow = cash_flow.get('free_cash_flow') or 0
             if free_cash_flow > 0:
                 # Simplified DCF: FCF * growth_rate / discount_rate
                 growth_rate = 0.05  # Assume 5% growth
@@ -632,6 +655,51 @@ def perform_fundamental_analysis(company_info: Dict, financial_statements: Dict)
                     'assumed_growth': growth_rate,
                     'discount_rate': discount_rate
                 }
+
+        cash_flow = financial_statements.get('cash_flow', {})
+        analysis['cash_flow_metrics'] = {
+            'free_cash_flow': cash_flow.get('free_cash_flow'),
+            'operating_cash_flow': cash_flow.get('operating_cash_flow'),
+            'capital_expenditure': cash_flow.get('capital_expenditure'),
+        }
+
+        # Transparent score: only available metrics contribute, avoiding false precision.
+        score = 0
+        scored_metrics = 0
+        if analysis['growth_metrics']['revenue_growth'] is not None:
+            scored_metrics += 1
+            score += 1 if analysis['growth_metrics']['revenue_growth'] > 0 else -1
+        if analysis['growth_metrics']['earnings_growth'] is not None:
+            scored_metrics += 1
+            score += 1 if analysis['growth_metrics']['earnings_growth'] > 0 else -1
+        if analysis.get('balance_sheet', {}).get('debt_to_equity') is not None:
+            scored_metrics += 1
+            score += 1 if analysis['balance_sheet']['debt_to_equity'] < 1 else -1
+        if analysis['cash_flow_metrics']['free_cash_flow'] is not None:
+            scored_metrics += 1
+            score += 1 if analysis['cash_flow_metrics']['free_cash_flow'] > 0 else -1
+        if analysis['valuation_metrics']['peg_ratio'] is not None:
+            scored_metrics += 1
+            score += 1 if analysis['valuation_metrics']['peg_ratio'] < 1.5 else -1
+
+        health_score = round(50 + (score / scored_metrics * 50), 1) if scored_metrics else None
+        analysis['financial_health'] = {
+            'score': health_score,
+            'rating': (
+                'Strong' if health_score is not None and health_score >= 70
+                else 'Watch' if health_score is not None and health_score >= 45
+                else 'Weak' if health_score is not None
+                else 'Unavailable'
+            ),
+            'metrics_scored': scored_metrics,
+            'method': 'Equal-weight score of available growth, leverage, cash-flow, and valuation signals.',
+        }
+
+        analysis['peer_comparison'] = company_info.get('peer_comparison') or {
+            'status': 'Unavailable',
+            'industry': company_info.get('industry'),
+            'peers': [],
+        }
         
         logger.info("Fundamental analysis completed")
         
