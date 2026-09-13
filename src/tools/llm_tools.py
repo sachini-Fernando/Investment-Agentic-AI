@@ -111,6 +111,87 @@ def _normalize_confidence(value: Any) -> float:
     
     return max(0.0, min(1.0, confidence))
 
+
+def _question_focus(question: Optional[str]) -> str:
+    """Classify the user's question so the answer can address its main topic."""
+    normalized = (question or "").lower()
+    intent_keywords = (
+        ("forecast", ("forecast", "predict", "target price", "price")),
+        ("risk", ("risk", "volatile", "volatility", "safe", "downside", "loss")),
+        ("valuation", ("value", "valuation", "overvalued", "undervalued", "expensive", "cheap", "pe ratio")),
+        ("sentiment", ("sentiment", "news", "headline", "market mood")),
+        ("portfolio", ("portfolio", "allocation", "diversif", "position size")),
+        ("recommendation", ("buy", "sell", "hold", "invest", "worth")),
+    )
+    for focus, keywords in intent_keywords:
+        if any(keyword in normalized for keyword in keywords):
+            return focus
+    return "overall analysis"
+
+
+def _heuristic_direct_answer(
+    question: Optional[str],
+    focus: str,
+    recommendation: str,
+    rationale: List[str],
+    payload: Dict[str, Any],
+) -> str:
+    """Give the heuristic path a useful answer when Gemini is unavailable."""
+    if not question:
+        return (
+            f"The overall research signal is {recommendation}. "
+            "Review the evidence and risks below before making any decision."
+        )
+
+    if focus == "forecast":
+        forecast = payload.get("price_forecast") or {}
+        current = forecast.get("current_price")
+        forecast_7d = forecast.get("forecast_7d")
+        forecast_30d = forecast.get("forecast_30d")
+        if current and forecast_7d and forecast_30d:
+            return (
+                f"The model estimates ${forecast_7d:.2f} in 7 days and ${forecast_30d:.2f} "
+                f"in 30 days, versus a current price of ${current:.2f}. "
+                "These are model estimates, not guaranteed targets."
+            )
+        return "A price forecast is not available from the current evidence."
+
+    if focus == "risk":
+        risk = payload.get("risk_metrics") or {}
+        volatility = risk.get("volatility")
+        drawdown = risk.get("max_drawdown")
+        details = []
+        if volatility is not None:
+            details.append(f"volatility is {volatility:.2%}")
+        if drawdown is not None:
+            details.append(f"maximum drawdown is {drawdown:.2%}")
+        if details:
+            return "The main measured risks are " + " and ".join(details) + ". Review the risk factors before investing."
+        return "The available evidence does not provide enough risk metrics for a specific risk assessment."
+
+    if focus == "valuation":
+        valuation = ((payload.get("fundamental_analysis") or {}).get("pe_analysis") or {}).get("valuation")
+        if valuation:
+            return f"The available fundamental analysis describes the stock as {valuation.lower()} based on its valuation metrics."
+        return "The available evidence does not provide enough valuation data for a specific conclusion."
+
+    if focus == "sentiment":
+        sentiment = payload.get("sentiment_score")
+        if sentiment is not None:
+            tone = "positive" if sentiment > 0.25 else "negative" if sentiment < -0.25 else "neutral"
+            return f"Recent news sentiment is {tone} at {sentiment:.2f}. Sentiment can change quickly and should be considered alongside fundamentals and risk."
+        return "News sentiment is not available from the current evidence."
+
+    if focus == "portfolio":
+        insights = payload.get("portfolio_insights") or {}
+        status = insights.get("concentration_status")
+        if status:
+            return f"For portfolio fit, the current concentration check is '{status}'. Review the target allocation and diversification guidance before changing your position."
+        return "Portfolio-fit guidance is not available from the current evidence."
+
+    evidence = rationale[0] if rationale else "the evidence is mixed"
+    return f"Based on your question, the research signal is {recommendation}. The strongest available point is that {evidence.lower()}"
+
 # ============================================================================
 # HEURISTIC FALLBACK ENGINE
 # ============================================================================
@@ -314,11 +395,8 @@ def _heuristic_synthesis(payload: Dict[str, Any]) -> Dict[str, Any]:
         rationale.append("Insufficient strong signals for a high-conviction decision.")
 
     question = (payload.get("user_query") or "").strip()
-    question_context = f"For your question, '{question}', " if question else "Based on the available evidence, "
-    direct_answer = (
-        f"{question_context}the research signal is {recommendation}. "
-        "Review the evidence and risks below before making any decision."
-    )
+    focus = _question_focus(question)
+    direct_answer = _heuristic_direct_answer(question, focus, recommendation, rationale, payload)
     beginner_explanation = (
         f"The agent found {len(decision_factors)} scored signals. "
         f"The overall result is {recommendation} with {confidence:.0%} model confidence. "
@@ -418,14 +496,17 @@ class GeminiRecommendationEngine:
         # System instruction
         prompt = (
             "You are an institutional equity analyst with 20+ years of experience.\n"
-            "Synthesize all available signals into a single investment recommendation.\n\n"
+            "Answer the user's question as the primary task, using the investment signals as evidence. "
+            "Only make a BUY, SELL, or HOLD recommendation when it helps answer the question.\n\n"
             
             "CRITICAL RULES:\n"
             "1. Use ONLY the evidence provided below\n"
             "2. Do NOT invent facts, prices, or events not in the context\n"
             "3. Be explicit about why each signal supports or weakens the decision\n"
             "4. If data is missing or uncertain, recommend HOLD\n"
-            "5. Return ONLY valid JSON (no markdown, no extra text)\n\n"
+            "5. Match the direct_answer and summary to the user's question. For forecast questions, report the available forecast; "
+            "for risk questions, discuss measured risks; for valuation questions, discuss valuation; for sentiment questions, discuss news tone.\n"
+            "6. Return ONLY valid JSON (no markdown, no extra text)\n\n"
             
             "The JSON must follow this exact schema:\n"
             "{\n"
@@ -452,7 +533,9 @@ class GeminiRecommendationEngine:
         # ===== DATA SECTION =====
         # Ticker & Query
         prompt += f"Ticker: {payload.get('ticker', 'UNKNOWN')}\n"
-        prompt += f"User query: {payload.get('user_query') or 'None'}\n\n"
+        user_query = (payload.get('user_query') or '').strip()
+        prompt += f"User query: {user_query or 'Provide an overall evidence-based analysis.'}\n"
+        prompt += f"Question focus: {_question_focus(user_query)}\n\n"
 
         # Stock Data
         stock_data = payload.get('stock_data') or {}
