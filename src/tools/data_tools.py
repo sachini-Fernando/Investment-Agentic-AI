@@ -228,4 +228,4 @@ def fetch_all_data(ticker: str) -> Dict[str, Any]:
     } 
      
     logger.info(f"Completed fetching all data for {ticker}") 
-    return data         
+    return data
