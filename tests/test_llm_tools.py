@@ -10,6 +10,7 @@ from src.tools.llm_tools import (
     _normalize_recommendation,
     _normalize_confidence,
     _heuristic_synthesis,
+    _question_focus,
     GEMINI_AVAILABLE
 )
 
@@ -228,6 +229,20 @@ class TestHeuristicFallback:
         assert result["confidence"] == 0.45  # Default low confidence
         assert "Insufficient strong signals" in result["reasoning"][0]
 
+    def test_heuristic_answer_matches_forecast_question(self, sample_payload):
+        result = _heuristic_synthesis({**sample_payload, "user_query": "What is the price forecast?"})
+
+        assert _question_focus("What is the price forecast?") == "forecast"
+        assert "$185.00" in result["direct_answer"]
+        assert "$190.00" in result["direct_answer"]
+
+    def test_heuristic_answer_matches_risk_question(self, sample_payload):
+        result = _heuristic_synthesis({**sample_payload, "user_query": "What are the main risks?"})
+
+        assert _question_focus("What are the main risks?") == "risk"
+        assert "22.00%" in result["direct_answer"]
+        assert "15.00%" in result["direct_answer"]
+
 
 # ============================================================================
 # TEST: GEMINI RECOMMENDATION ENGINE
@@ -254,7 +269,18 @@ class TestGeminiRecommendationEngine:
         assert "RSI: 45.3" in prompt
         assert "Sentiment Score: 0.42" in prompt
         assert "Sharpe Ratio: 1.2" in prompt
+        assert "Question focus: recommendation" in prompt
         assert "BUY|SELL|HOLD" in prompt
+
+    def test_engine_build_prompt_changes_question_focus(self, sample_payload):
+        engine = GeminiRecommendationEngine()
+
+        forecast_prompt = engine.build_prompt({**sample_payload, "user_query": "What is the price forecast?"})
+        risk_prompt = engine.build_prompt({**sample_payload, "user_query": "What are the risks?"})
+
+        assert "Question focus: forecast" in forecast_prompt
+        assert "Question focus: risk" in risk_prompt
+        assert forecast_prompt != risk_prompt
     
     def test_engine_generate_without_gemini(self, sample_payload):
         """Test engine falls back to heuristic when Gemini unavailable."""

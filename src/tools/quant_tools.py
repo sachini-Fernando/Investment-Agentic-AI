@@ -509,12 +509,14 @@ def fallback_forecast(prices: List[Dict], forecast_days: int = 30) -> Dict[str, 
         current_price = close_prices[-1]
         
         # Simple linear extrapolation
-        forecast_7d = current_price + (trend * 7)
-        forecast_30d = current_price + (trend * 30)
+        all_forecasts = [current_price + (trend * day) for day in range(1, forecast_days + 1)]
+        forecast_7d = all_forecasts[6] if len(all_forecasts) > 6 else all_forecasts[-1]
+        forecast_30d = all_forecasts[-1]
         
         # Ensure forecasts are positive
-        forecast_7d = max(forecast_7d, current_price * 0.9)
-        forecast_30d = max(forecast_30d, current_price * 0.8)
+        all_forecasts = [max(price, current_price * 0.8) for price in all_forecasts]
+        forecast_7d = all_forecasts[6] if len(all_forecasts) > 6 else all_forecasts[-1]
+        forecast_30d = all_forecasts[-1]
         
         logger.info(f"Fallback forecast: 7d={forecast_7d:.2f}, 30d={forecast_30d:.2f}")
         
@@ -522,6 +524,7 @@ def fallback_forecast(prices: List[Dict], forecast_days: int = 30) -> Dict[str, 
             'model': 'Fallback',
             'forecast_7d': forecast_7d,
             'forecast_30d': forecast_30d,
+            'all_forecasts': all_forecasts,
             'current_price': current_price,
             'confidence': 0.4
         }

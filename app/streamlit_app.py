@@ -36,6 +36,7 @@ from src.tools.portfolio_tools import (  # noqa: E402
     save_portfolio,
     suggest_rebalancing,
 )
+from src.tools.llm_tools import _question_focus  # noqa: E402
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -923,23 +924,68 @@ def render_recommendation(state):
                 unsafe_allow_html=True,
             )
 
-        col1, col2, col3 = st.columns(3)
+        question_focus = _question_focus(state.get("user_query"))
+        forecast = state.get("price_forecast") or {}
+        risk_metrics = state.get("risk_metrics") or {}
+        fundamental = state.get("fundamental_analysis") or {}
+        valuation = fundamental.get("valuation_metrics") or {}
+        if question_focus == "forecast":
+            forecast_path = [
+                float(price)
+                for price in forecast.get("all_forecasts", [])
+                if price is not None
+            ]
+            kpis = [
+                ("7-Day Forecast", _format_money(forecast.get("forecast_7d"))),
+                ("30-Day Forecast", _format_money(forecast.get("forecast_30d"))),
+                (
+                    "30-Day Range",
+                    f"${min(forecast_path):.2f} - ${max(forecast_path):.2f}"
+                    if forecast_path else "N/A",
+                ),
+            ]
+        elif question_focus == "risk":
+            kpis = [
+                ("Volatility", _format_percent(risk_metrics.get("volatility"))),
+                ("Max Drawdown", _format_percent(risk_metrics.get("max_drawdown"))),
+                ("VaR (95%)", _format_percent(risk_metrics.get("VaR_95"))),
+            ]
+        elif question_focus == "valuation":
+            kpis = [
+                ("P/E", _format_ratio(valuation.get("pe_ratio"))),
+                ("PEG", _format_ratio(valuation.get("peg_ratio"))),
+                ("P/B", _format_ratio(valuation.get("price_to_book"))),
+            ]
+        elif question_focus == "sentiment":
+            sentiment = state.get("sentiment_score")
+            sentiment_label = (
+                "Positive" if sentiment is not None and sentiment > 0.3
+                else "Negative" if sentiment is not None and sentiment < -0.3
+                else "Neutral" if sentiment is not None else "N/A"
+            )
+            kpis = [
+                ("Sentiment", sentiment_label),
+                ("Sentiment Score", f"{sentiment:.2f}" if sentiment is not None else "N/A"),
+                ("Sentiment Confidence", _format_percent(state.get("sentiment_confidence"))),
+            ]
+        elif question_focus == "portfolio":
+            insights = state.get("portfolio_insights") or {}
+            kpis = [
+                ("Target Stocks", f"{(insights.get('target_allocation') or {}).get('Stocks', 'N/A')}%"),
+                ("Single-stock Weight", _format_percent(insights.get("resulting_ticker_weight"))),
+                ("Concentration", insights.get("concentration_status", "N/A")),
+            ]
+        else:
+            kpis = [
+                ("Recommendation", llm_recommendation or final_recommendation or "N/A"),
+                ("Confidence", _format_percent(llm_confidence if llm_confidence is not None else state.get("confidence_score"))),
+                ("Risk Level", state.get("risk_level", "N/A")),
+            ]
 
-        with col1:
-            st.metric("Gemini Recommendation", llm_recommendation or "N/A")
-            if llm_confidence is not None:
-                st.metric("Gemini Confidence", f"{llm_confidence:.2%}")
-            elif state.get("confidence_score") is not None:
-                st.metric("Confidence", f"{state['confidence_score']:.2%}")
-
-        with col2:
-            st.metric("Final Recommendation", final_recommendation or "N/A")
-            st.metric("Risk Level", state.get("risk_level", "N/A"))
-
-        with col3:
-            st.metric("Validation", state.get("validation_status", "N/A"))
-            if state.get("stop_loss"):
-                st.metric("Stop Loss", f"${state['stop_loss']:.2f}")
+        kpi_columns = st.columns(len(kpis))
+        for column, (label, value) in zip(kpi_columns, kpis):
+            with column:
+                st.metric(label, value)
 
         details_col1, details_col2 = st.columns(2)
 
@@ -1011,6 +1057,43 @@ def render_price_forecast(state):
                 if forecast_30d:
                     change_30d = ((forecast_30d - current_price) / current_price) * 100
                     st.metric("30-Day Forecast", f"${forecast_30d:.2f}", delta=f"{change_30d:.2f}%")
+
+            forecast_path = [
+                float(price)
+                for price in forecast.get("all_forecasts", [])
+                if price is not None
+            ]
+            if forecast_path:
+                seven_day_path = forecast_path[:7]
+                range_col1, range_col2 = st.columns(2)
+                with range_col1:
+                    st.metric(
+                        "7-Day Prediction Range",
+                        f"${min(seven_day_path):.2f} - ${max(seven_day_path):.2f}",
+                    )
+                with range_col2:
+                    st.metric(
+                        "30-Day Prediction Range",
+                        f"${min(forecast_path):.2f} - ${max(forecast_path):.2f}",
+                    )
+
+                figure = go.Figure()
+                figure.add_trace(
+                    go.Scatter(
+                        y=forecast_path,
+                        mode="lines",
+                        name="Predicted price",
+                        line={"color": "#2563eb", "width": 2},
+                    )
+                )
+                figure.update_layout(
+                    height=280,
+                    margin={"l": 0, "r": 0, "t": 20, "b": 0},
+                    xaxis_title="Forecast day",
+                    yaxis_title="Price ($)",
+                    showlegend=False,
+                )
+                st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
 
             if forecast.get("confidence"):
                 st.write(f"**Forecast Confidence:** {forecast['confidence']:.2%}")
@@ -1227,14 +1310,15 @@ def render_analysis_history(ticker):
 def render_beginner_recent_analyses():
     """Show automatic saved history with first-time-investor wording."""
     section_title("cpu", "Your Recent Analyses", "teal", "Saved automatically in MongoDB")
-    recent = load_analysis_history(limit=3, user_id=st.session_state.get("user_id"))
-    if not recent:
+    saved_history = load_analysis_history(limit=50, user_id=st.session_state.get("user_id"))
+    if not saved_history:
         st.info("Your first completed analysis will be saved here automatically. Choose a ticker and select Analyze Stock to begin.")
         return
 
+    recent = saved_history[:3]
     latest = recent[0]
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Saved analyses", len(recent))
+    col1.metric("Saved analyses", len(saved_history))
     col2.metric("Latest ticker", latest.get("ticker", "N/A"))
     col3.metric("Latest view", latest.get("recommendation", "N/A"))
     confidence = latest.get("confidence")
