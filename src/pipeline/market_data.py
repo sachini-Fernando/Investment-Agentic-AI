@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from statistics import median
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -100,7 +101,7 @@ def validate_price_history(records: List[Dict[str, Any]]) -> List[Dict[str, Any]
 ####################################
 # clean_price_frame()
 ####################################
-def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame:
+def _clean_price_frame(frame: Any) -> Any:
     if not PANDAS_AVAILABLE:
         return frame
 
@@ -280,6 +281,9 @@ class MarketDataIngestion:
                 ),
                 "source": "yfinance",
             }
+            company_info["peer_comparison"] = self.fetch_peer_comparison(
+                ticker, info.get("industry"), info.get("sector"), info
+            )
 
             latest_financials = (
                 financials.iloc[:, 0].to_dict() if not financials.empty else {}
@@ -342,6 +346,59 @@ class MarketDataIngestion:
         except Exception as exc:
             logger.warning(f"yFinance fundamentals fetch failed for {ticker}: {exc}")
             return {"company_info": {}, "financial_statements": {}}
+
+    def fetch_peer_comparison(
+        self,
+        ticker: str,
+        industry: Optional[str],
+        sector: Optional[str],
+        info: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Fetch a small, transparent peer set for relative company comparison."""
+        if not YFINANCE_AVAILABLE:
+            return {"status": "Unavailable", "industry": industry, "peers": []}
+
+        configured_peers = info.get("companyPeers") or info.get("peerSymbols") or []
+        sector_peers = {
+            "Technology": ["MSFT", "GOOGL", "AMZN"],
+            "Consumer Cyclical": ["AMZN", "NKE", "MCD"],
+            "Financial Services": ["JPM", "BAC", "GS"],
+            "Healthcare": ["JNJ", "PFE", "MRK"],
+            "Communication Services": ["GOOGL", "META", "DIS"],
+        }
+        candidates = [str(peer).upper() for peer in configured_peers] or sector_peers.get(sector, [])
+        candidates = [peer for peer in candidates if peer != ticker.upper()][:3]
+        peers = []
+        for peer in candidates:
+            try:
+                peer_info = yf.Ticker(peer).info or {}
+                if not peer_info:
+                    continue
+                peers.append({
+                    "ticker": peer,
+                    "name": peer_info.get("shortName") or peer_info.get("longName") or peer,
+                    "pe_ratio": _safe_float(peer_info.get("trailingPE")),
+                    "peg_ratio": _safe_float(peer_info.get("pegRatio")),
+                    "price_to_book": _safe_float(peer_info.get("priceToBook")),
+                    "profit_margin": _safe_float(peer_info.get("profitMargins")),
+                })
+            except Exception as exc:
+                logger.debug("Peer lookup failed for %s: %s", peer, exc)
+
+        if not peers:
+            return {"status": "Unavailable", "industry": industry, "peers": []}
+
+        medians = {}
+        for field in ("pe_ratio", "peg_ratio", "price_to_book", "profit_margin"):
+            values = [peer[field] for peer in peers if peer.get(field) is not None]
+            medians[field] = median(values) if values else None
+        return {
+            "status": "Available",
+            "industry": industry,
+            "sector": sector,
+            "peers": peers,
+            "peer_medians": medians,
+        }
 
     ############################################
     # add Alpha Vantage market overview fetching

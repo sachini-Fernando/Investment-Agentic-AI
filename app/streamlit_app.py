@@ -325,6 +325,20 @@ def render_stock_data(state):
         st.warning("No stock data available")
 
 
+def _format_percent(value):
+    return f"{value:.1%}" if isinstance(value, (int, float)) else "N/A"
+
+
+def _format_ratio(value):
+    return f"{value:.2f}" if isinstance(value, (int, float)) else "N/A"
+
+
+def _format_money(value, currency=None):
+    if not isinstance(value, (int, float)):
+        return "N/A"
+    return f"{currency or '$'} {value:,.0f}"
+
+
 def render_company_info(state):
     """Renders company information section."""
     section_title("building", "Company Information", "blue")
@@ -349,6 +363,54 @@ def render_company_info(state):
         if info.get("description"):
             with st.expander("📝 Business Summary"):
                 st.write(info.get("description"))
+
+        analysis = state.get("fundamental_analysis") or {}
+        st.markdown("### Financial Overview")
+        growth = analysis.get("growth_metrics") or {}
+        cash_flow = analysis.get("cash_flow_metrics") or {}
+        valuation = analysis.get("valuation_metrics") or {}
+        balance_sheet = analysis.get("balance_sheet") or {}
+        health = analysis.get("financial_health") or {}
+
+        growth_col1, growth_col2, growth_col3, growth_col4 = st.columns(4)
+        growth_col1.metric("Revenue Growth", _format_percent(growth.get("revenue_growth")))
+        growth_col2.metric("Earnings Growth", _format_percent(growth.get("earnings_growth")))
+        growth_col3.metric("Free Cash Flow", _format_money(cash_flow.get("free_cash_flow"), info.get("currency")))
+        growth_col4.metric("Debt / Equity", _format_ratio(balance_sheet.get("debt_to_equity")))
+
+        valuation_col1, valuation_col2, valuation_col3, valuation_col4 = st.columns(4)
+        valuation_col1.metric("P/E", _format_ratio(valuation.get("pe_ratio")))
+        valuation_col2.metric("PEG", _format_ratio(valuation.get("peg_ratio")))
+        valuation_col3.metric("P/B", _format_ratio(valuation.get("price_to_book")))
+        valuation_col4.metric("Dividend Yield", _format_percent(valuation.get("dividend_yield")))
+
+        health_col1, health_col2 = st.columns([1, 2])
+        with health_col1:
+            score = health.get("score")
+            st.metric("Financial Health", health.get("rating", "Unavailable"), f"{score:.0f}/100" if score is not None else None)
+        with health_col2:
+            st.caption(
+                f"Health score: {health.get('metrics_scored', 0)} available signals. "
+                "Growth, leverage, cash flow, and valuation are weighted equally."
+            )
+
+        peer_comparison = analysis.get("peer_comparison") or info.get("peer_comparison") or {}
+        with st.expander("🏭 Industry & Competitor Comparison", expanded=True):
+            peers = peer_comparison.get("peers") or []
+            if peers:
+                st.caption(f"Industry: {peer_comparison.get('industry') or 'Not available'}")
+                peer_rows = [{
+                    "Company": peer.get("name", peer.get("ticker")),
+                    "Ticker": peer.get("ticker"),
+                    "P/E": _format_ratio(peer.get("pe_ratio")),
+                    "PEG": _format_ratio(peer.get("peg_ratio")),
+                    "P/B": _format_ratio(peer.get("price_to_book")),
+                    "Profit Margin": _format_percent(peer.get("profit_margin")),
+                } for peer in peers]
+                st.dataframe(peer_rows, use_container_width=True, hide_index=True)
+                st.caption("Peer values are provider snapshots; compare companies with similar business models and accounting periods.")
+            else:
+                st.info("Peer comparison is unavailable for this ticker.")
     else:
         st.warning("No company information available")
 
