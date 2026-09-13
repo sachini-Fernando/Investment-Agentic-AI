@@ -1025,6 +1025,12 @@ def main():
     """Main Streamlit application."""
     load_theme()
     user_id = require_authenticated_user()
+    if st.sidebar.button("Sign out"):
+        audit_event("logout", user_id, "success")
+        _SESSIONS.revoke(st.session_state.get("session_token", ""))
+        st.session_state.pop("session_token", None)
+        st.session_state.pop("user_id", None)
+        st.rerun()
     render_header()
 
     if "analysis_result" not in st.session_state:
