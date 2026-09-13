@@ -5,6 +5,7 @@ venv/
 # Environment variables / secrets
 .env.example
 .env
+data/portfolios.json
 
 # Python cache
 __pycache__/

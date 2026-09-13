@@ -1,3 +1,4 @@
+
 """
 Streamlit UI for the Investment Agentic AI system.
 Provides an interactive dashboard for investment analysis.
@@ -6,10 +7,6 @@ Provides an interactive dashboard for investment analysis.
 import sys
 import base64
 from pathlib import Path
-
-# Resolve imports from the repository root when Streamlit launches this file.
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -24,9 +21,19 @@ from src.utils.security import (
     validate_ticker_symbol,
 )
 
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
 from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
+from src.tools.portfolio_tools import (  # noqa: E402
+    calculate_portfolio_summary,
+    load_portfolio,
+    save_portfolio,
+    suggest_rebalancing,
+)
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -447,6 +454,162 @@ def render_portfolio_fit(state):
     else:
         st.success("This proposed weight is within the app's 10% single-company educational guardrail.")
     st.caption("Educational planning aid only. Consider your full finances, taxes, and professional advice before acting.")
+
+
+def render_portfolio_manager(_state=None):
+    """Render holdings, performance, allocation, dividend, and rebalance views."""
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        return
+
+    holdings = load_portfolio(user_id)
+    with st.expander("💼 Portfolio Management", expanded=not holdings):
+        section_title("target", "Portfolio Management", "green", "Track holdings, income, diversification, and educational rebalancing cues")
+        with st.form("add_holding_form", clear_on_submit=True):
+            st.markdown("**Add a holding**")
+            input_col1, input_col2, input_col3 = st.columns(3)
+            with input_col1:
+                holding_ticker = st.text_input("Ticker", placeholder="AAPL").strip().upper()
+                company = st.text_input("Company", placeholder="Apple Inc.")
+                sector = st.text_input("Sector", value="Other")
+            with input_col2:
+                asset_type = st.selectbox("Asset type", ["Stocks", "Bonds", "Cash", "ETF", "Crypto", "Other"])
+                shares = st.number_input("Shares", min_value=0.0, step=0.01, format="%.4f")
+                purchase_price = st.number_input("Purchase price", min_value=0.0, step=0.01, format="%.2f")
+            with input_col3:
+                current_price = st.number_input("Current price", min_value=0.0, step=0.01, format="%.2f")
+                dividend_per_share = st.number_input("Dividend per share", min_value=0.0, step=0.01, format="%.4f")
+                total_dividends = st.number_input("Total dividends received", min_value=0.0, step=0.01, format="%.2f")
+            submitted = st.form_submit_button("Add holding", type="primary", use_container_width=True)
+
+        if submitted:
+            if not holding_ticker or shares <= 0 or purchase_price <= 0 or current_price <= 0:
+                st.error("Ticker, shares, purchase price, and current price are required.")
+            elif any(item.get("ticker") == holding_ticker for item in holdings):
+                st.error("That ticker is already in your portfolio. Update the existing holding or use a distinct ticker.")
+            else:
+                holdings.append({
+                    "ticker": holding_ticker,
+                    "company": company or holding_ticker,
+                    "sector": sector or "Other",
+                    "asset_type": asset_type,
+                    "shares": shares,
+                    "purchase_price": purchase_price,
+                    "current_price": current_price,
+                    "dividend_per_share": dividend_per_share,
+                    "total_dividends": total_dividends or shares * dividend_per_share,
+                })
+                save_portfolio(user_id, holdings)
+                log_audit_event(user_id, "portfolio_holding_added", {"ticker": holding_ticker}, "success")
+                st.success(f"Added {holding_ticker} to your portfolio.")
+                st.rerun()
+
+        if not holdings:
+            st.info("Add your first holding to see performance, allocation, concentration, and dividend tracking.")
+            return
+
+        summary = calculate_portfolio_summary(holdings)
+        metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
+        metric_col1.metric("Current value", f"${summary['total_value']:,.2f}")
+        metric_col2.metric("Cost basis", f"${summary['total_cost']:,.2f}")
+        metric_col3.metric("Total return", f"${summary['total_return']:,.2f}", f"{summary['return_percent']:.1%}")
+        metric_col4.metric("Dividends", f"${summary['total_dividends']:,.2f}")
+        metric_col5.metric("Holdings", len(summary["holdings"]))
+
+        display_rows = [
+            {
+                "Ticker": item["ticker"],
+                "Company": item["company"],
+                "Shares": item["shares"],
+                "Purchase": f"${item['purchase_price']:,.2f}",
+                "Current": f"${item['current_price']:,.2f}",
+                "Value": f"${item['current_value']:,.2f}",
+                "Return": f"${item['total_return']:,.2f} ({item['return_percent']:.1%})",
+                "Dividends": f"${item['total_dividends']:,.2f}",
+                "Sector": item["sector"],
+                "Asset type": item["asset_type"],
+            }
+            for item in summary["holdings"]
+        ]
+        st.dataframe(display_rows, use_container_width=True, hide_index=True)
+
+        edit_ticker = st.selectbox("Holding to update", [item["ticker"] for item in summary["holdings"]], key="edit_portfolio_ticker")
+        current_holding = next(item for item in summary["holdings"] if item["ticker"] == edit_ticker)
+        with st.form("edit_holding_form"):
+            st.markdown("**Update holding**")
+            edit_col1, edit_col2, edit_col3 = st.columns(3)
+            with edit_col1:
+                edit_company = st.text_input("Company", value=current_holding["company"])
+                edit_sector = st.text_input("Sector", value=current_holding["sector"])
+            with edit_col2:
+                edit_shares = st.number_input("Shares", min_value=0.0, value=current_holding["shares"], step=0.01, format="%.4f")
+                edit_purchase_price = st.number_input("Purchase price", min_value=0.0, value=current_holding["purchase_price"], step=0.01, format="%.2f")
+            with edit_col3:
+                edit_current_price = st.number_input("Current price", min_value=0.0, value=current_holding["current_price"], step=0.01, format="%.2f")
+                edit_dividends = st.number_input("Total dividends received", min_value=0.0, value=current_holding["total_dividends"], step=0.01, format="%.2f")
+            update_submitted = st.form_submit_button("Update holding", use_container_width=True)
+
+        if update_submitted:
+            updated_holdings = []
+            for item in holdings:
+                if item.get("ticker") == edit_ticker:
+                    updated_holdings.append({
+                        **item,
+                        "company": edit_company or edit_ticker,
+                        "sector": edit_sector or "Other",
+                        "shares": edit_shares,
+                        "purchase_price": edit_purchase_price,
+                        "current_price": edit_current_price,
+                        "total_dividends": edit_dividends,
+                    })
+                else:
+                    updated_holdings.append(item)
+            save_portfolio(user_id, updated_holdings)
+            log_audit_event(user_id, "portfolio_holding_updated", {"ticker": edit_ticker}, "success")
+            st.success(f"Updated {edit_ticker}.")
+            st.rerun()
+
+        remove_col, risk_col = st.columns([1, 2])
+        with remove_col:
+            remove_ticker = st.selectbox("Remove holding", [item["ticker"] for item in summary["holdings"]], key="remove_portfolio_ticker")
+            if st.button("Remove selected holding", key="remove_portfolio_holding"):
+                save_portfolio(user_id, [item for item in holdings if item.get("ticker") != remove_ticker])
+                log_audit_event(user_id, "portfolio_holding_removed", {"ticker": remove_ticker}, "success")
+                st.rerun()
+        with risk_col:
+            risk_profile = st.selectbox("Rebalancing target", ["Conservative", "Balanced", "Growth", "Aggressive"], index=1, key="portfolio_risk_profile")
+
+        chart_col1, chart_col2, chart_col3 = st.columns(3)
+        for column, title, allocation, colors in [
+            (chart_col1, "By company", summary["company_allocations"], ["#c85c3d", "#567b76", "#b9823b", "#6c6a63"]),
+            (chart_col2, "By sector", summary["sector_allocations"], ["#567b76", "#c85c3d", "#b9823b", "#8f8b82"]),
+            (chart_col3, "By asset type", summary["asset_type_allocations"], ["#b9823b", "#567b76", "#c85c3d", "#8f8b82"]),
+        ]:
+            with column:
+                st.caption(title)
+                chart = go.Figure(data=[go.Pie(labels=list(allocation), values=list(allocation.values()), hole=0.55, marker={"colors": colors})])
+                chart.update_layout(height=250, margin=dict(l=5, r=5, t=5, b=5), showlegend=True, paper_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(chart, use_container_width=True, key=f"portfolio_{title.replace(' ', '_')}")
+
+        if summary["concentration_alerts"]:
+            for alert in summary["concentration_alerts"]:
+                st.warning(alert)
+        else:
+            st.success("No company or sector concentration warning was triggered by the educational guardrails.")
+
+        suggestions = suggest_rebalancing(summary, risk_profile)
+        st.markdown("**Rebalancing suggestions**")
+        if suggestions:
+            for suggestion in suggestions:
+                direction = "add exposure" if suggestion["action"] == "Increase" else "reduce exposure"
+                st.info(
+                    f"{suggestion['action']} {suggestion['asset_type']} exposure: "
+                    f"{suggestion['current_weight']:.0%} currently vs {suggestion['target_weight']:.0%} target "
+                    f"({direction} by about {abs(suggestion['difference']):.0%})."
+                )
+        else:
+            st.success(f"Your asset-type mix is within 5 percentage points of the {risk_profile.lower()} educational target mix.")
+        st.caption("Portfolio values and rebalancing cues are educational estimates. Verify prices, taxes, fees, and dividend records before acting.")
 
 
 def render_alerts(state):
@@ -1121,6 +1284,7 @@ def render_beginner_guide():
 def render_analysis_page(state):
     """Render one analysis view selected from the sidebar navigation."""
     page_options = {
+        "💼 Portfolio Management": render_portfolio_manager,
         "📊 Stock Data": render_stock_data,
         "🏢 Company Info": render_company_info,
         "💬 Sentiment": render_sentiment_analysis,
@@ -1208,7 +1372,13 @@ def main():
 
         render_analysis_page(state)
     else:
-        st.info("Enter a stock ticker and click 'Analyze Stock' to begin")
+        selected_page = st.sidebar.radio(
+            "Dashboard pages",
+            options=["💼 Portfolio Management"],
+            key="dashboard_page",
+        )
+        if selected_page == "💼 Portfolio Management":
+            render_portfolio_manager()
 
 
 if __name__ == "__main__":
