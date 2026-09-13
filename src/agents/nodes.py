@@ -326,7 +326,7 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
         state['portfolio_insights'] = build_portfolio_insights(
             state.get('investor_profile') or {}, state['ticker']
         )
-            state['alerts'] = evaluate_alerts(state, state.get('alert_rules'))
+        state['alerts'] = evaluate_alerts(state, state.get('alert_rules'))
 
         llm_payload = {
             "ticker": state["ticker"],
@@ -348,7 +348,7 @@ def risk_assessment_agent(state: InvestmentState) -> InvestmentState:
             "market_context": state.get("market_context"),
             "investor_profile": state.get("investor_profile"),
             "portfolio_insights": state.get("portfolio_insights"),
-                    "alerts": state.get("alerts"),
+                "alerts": state.get("alerts"),
         }
 
         llm_result = generate_investment_recommendation(llm_payload)
