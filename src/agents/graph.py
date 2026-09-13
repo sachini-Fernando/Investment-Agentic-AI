@@ -209,6 +209,7 @@ def run_investment_analysis(
     use_mongodb: bool = False,
     thread_id: Optional[str] = None,
     investor_profile: Optional[dict] = None,
+    alert_rules: Optional[dict] = None,
 ):
     """
         Runs the investment analysis workflow for a given ticker.
@@ -234,6 +235,8 @@ def run_investment_analysis(
         "user_query": user_query,
         "investor_profile": investor_profile,
         "portfolio_insights": None,
+            "alert_rules": alert_rules,
+            "alerts": None,
         "messages": [],
         # Data Acquisition outputs
         "stock_data": None,

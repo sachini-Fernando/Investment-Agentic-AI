@@ -8,6 +8,8 @@ class InvestmentState(TypedDict):
     user_query: Optional[str]
     investor_profile: Optional[Dict]
     portfolio_insights: Optional[Dict]
+    alert_rules: Optional[Dict]
+    alerts: Optional[List[Dict]]
     
     # === COMMUNICATION CHANNEL ===
     messages: Annotated[List[Dict], add_messages]

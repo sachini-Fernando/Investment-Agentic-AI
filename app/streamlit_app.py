@@ -18,8 +18,16 @@ sys.path.insert(0, str(project_root))
 from src.agents.graph import run_investment_analysis  # noqa: E402
 from src.pipeline import MongoPipelineStore  # noqa: E402
 from src.pipeline.local_history import load_persistent_history, save_analysis_summary  # noqa: E402
+from src.utils.security import (
+    AuthenticationError,
+    SessionManager,
+    UserDirectory,
+    audit_event,
+)
 
 assets_dir = Path(__file__).parent / "assets"
+_USERS = UserDirectory()
+_SESSIONS = SessionManager()
 
 
 # Page configuration
@@ -94,6 +102,41 @@ def load_theme():
             f"<style>{css_path.read_text(encoding='utf-8')}</style>",
             unsafe_allow_html=True,
         )
+
+
+def require_authenticated_user() -> str:
+    """Render sign-in/registration and stop the app until a session exists."""
+    token = st.session_state.get("session_token")
+    if token:
+        try:
+            return _SESSIONS.user_for(token)
+        except AuthenticationError:
+            st.session_state.pop("session_token", None)
+
+    st.title("Sign in to InvestSage")
+    st.caption("Your analysis history is private to your account.")
+    users_exist = bool(_USERS._read())
+    mode = st.radio("Account", ["Sign in", "Create account"] if not users_exist else ["Sign in"], horizontal=True)
+    with st.form("authentication"):
+        user_id = st.text_input("User ID")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(mode)
+    if submitted:
+        try:
+            if mode == "Create account":
+                _USERS.register(user_id, password)
+                audit_event("register", user_id.strip().lower(), "success")
+            if not _USERS.authenticate(user_id, password):
+                raise AuthenticationError("Invalid user ID or password.")
+            normalized = user_id.strip().lower()
+            st.session_state.session_token = _SESSIONS.create(normalized)
+            st.session_state.user_id = normalized
+            audit_event("login", normalized, "success")
+            st.rerun()
+        except (AuthenticationError, ValueError) as exc:
+            audit_event("login", user_id.strip().lower(), "failure")
+            st.error(str(exc))
+    st.stop()
 
 
 def render_header():
@@ -195,6 +238,31 @@ def render_sidebar():
         "liquidity_need": liquidity_need,
     }
 
+    with st.sidebar.expander("🚨 Alerts", expanded=False):
+        price_alert_enabled = st.checkbox("Price target", value=False)
+        price_target = st.number_input("Target price", min_value=0.0, value=0.0, step=1.0, disabled=not price_alert_enabled)
+        price_direction = st.selectbox("Trigger when price is", ["above", "below"], disabled=not price_alert_enabled)
+        rsi_alert_enabled = st.checkbox("RSI threshold", value=True)
+        rsi_overbought = st.number_input("Overbought RSI", min_value=50.0, max_value=100.0, value=70.0, step=1.0, disabled=not rsi_alert_enabled)
+        rsi_oversold = st.number_input("Oversold RSI", min_value=0.0, max_value=50.0, value=30.0, step=1.0, disabled=not rsi_alert_enabled)
+        large_move_enabled = st.checkbox("Large price movement", value=True)
+        large_move_threshold = st.number_input("Movement threshold (%)", min_value=0.1, value=5.0, step=0.5, disabled=not large_move_enabled)
+        negative_news_enabled = st.checkbox("Negative news", value=True)
+        negative_news_threshold = st.number_input("Negative sentiment threshold", min_value=-1.0, max_value=0.0, value=-0.5, step=0.1, disabled=not negative_news_enabled)
+        earnings_enabled = st.checkbox("Earnings announcement", value=True)
+        earnings_lookahead = st.number_input("Earnings lookahead (days)", min_value=0, max_value=90, value=7, step=1, disabled=not earnings_enabled)
+        allocation_enabled = st.checkbox("Portfolio allocation limit", value=True)
+        allocation_limit = st.number_input("Maximum ticker allocation (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0, disabled=not allocation_enabled) / 100
+
+    alert_rules = {
+        "price_target": {"enabled": price_alert_enabled, "target": price_target, "direction": price_direction},
+        "rsi": {"enabled": rsi_alert_enabled, "overbought": rsi_overbought, "oversold": rsi_oversold},
+        "large_move": {"enabled": large_move_enabled, "threshold_percent": large_move_threshold},
+        "negative_news": {"enabled": negative_news_enabled, "threshold": negative_news_threshold, "lookback_days": 3},
+        "earnings": {"enabled": earnings_enabled, "lookahead_days": earnings_lookahead, "lookback_days": 3},
+        "portfolio_allocation": {"enabled": allocation_enabled, "limit": allocation_limit},
+    }
+
     with st.sidebar.expander("⚙️ Advanced Options"):
         use_conditional = st.checkbox(
             "Use Conditional Routing",
@@ -207,7 +275,7 @@ def render_sidebar():
         use_container_width=True,
     )
 
-    return ticker, use_conditional, investor_profile, analyze_button
+    return ticker, use_conditional, investor_profile, alert_rules, analyze_button
 
 
 def render_question_chat():
@@ -256,6 +324,27 @@ def render_portfolio_fit(state):
     else:
         st.success("This proposed weight is within the app's 10% single-company educational guardrail.")
     st.caption("Educational planning aid only. Consider your full finances, taxes, and professional advice before acting.")
+
+
+def render_alerts(state):
+    """Render triggered market and portfolio alerts for the completed analysis."""
+    section_title("shield", "Alerts", "red", "Signals triggered by the thresholds you selected")
+    alerts = state.get("alerts") or []
+    if not alerts:
+        st.success("No configured alerts were triggered by the available data.")
+        return
+
+    st.warning(f"{len(alerts)} alert(s) triggered for {state.get('ticker', 'this ticker')}.")
+    for alert in alerts:
+        message = alert.get("message", "Alert triggered")
+        if alert.get("severity") == "critical":
+            st.error(message)
+        else:
+            st.warning(message)
+        st.caption(
+            f"Type: {alert.get('type', 'unknown')} | Source: {alert.get('source', 'unknown')} | "
+            f"Triggered: {alert.get('triggered_at', 'N/A')}"
+        )
 
 
 def render_stock_data(state):
@@ -672,7 +761,10 @@ def render_execution_info(state):
 
 def load_analysis_history(ticker=None, limit=10):
     """Load analysis history from MongoDB only."""
-    history = load_persistent_history(allow_local_fallback=False)
+    history = load_persistent_history(
+        allow_local_fallback=False,
+        user_id=st.session_state.get("user_id"),
+    )
     if ticker:
         history = [item for item in history if item.get("ticker") == ticker.upper()]
     return history[:limit]
@@ -914,6 +1006,7 @@ def render_analysis_page(state):
         "📈 Technical": render_technical_indicators,
         "🎯 Recommendation": render_recommendation,
         "🧩 Portfolio Fit": render_portfolio_fit,
+        "🚨 Alerts": render_alerts,
         "🔮 Forecast": render_price_forecast,
         "🛡️ Risk": render_risk_metrics,
         "🕓 History": lambda current_state: render_beginner_history(),
@@ -930,6 +1023,13 @@ def render_analysis_page(state):
 def main():
     """Main Streamlit application."""
     load_theme()
+    user_id = require_authenticated_user()
+    if st.sidebar.button("Sign out"):
+        audit_event("logout", user_id, "success")
+        _SESSIONS.revoke(st.session_state.get("session_token", ""))
+        st.session_state.pop("session_token", None)
+        st.session_state.pop("user_id", None)
+        st.rerun()
     render_header()
 
     if "analysis_result" not in st.session_state:
@@ -937,7 +1037,7 @@ def main():
     if "last_ticker" not in st.session_state:
         st.session_state.last_ticker = None
 
-    ticker, use_conditional, investor_profile, analyze_button = render_sidebar()
+    ticker, use_conditional, investor_profile, alert_rules, analyze_button = render_sidebar()
     user_query, chat_submitted = render_question_chat()
     analyze_button = analyze_button or chat_submitted
 
@@ -949,13 +1049,15 @@ def main():
                     user_query=user_query if user_query else None,
                     use_conditional=use_conditional,
                     use_mongodb=True,
-                    investor_profile=investor_profile,
+                    investor_profile={**investor_profile, "user_id": user_id},
+                    alert_rules=alert_rules,
                 )
+                result["user_id"] = user_id
 
                 st.session_state.analysis_result = result
                 st.session_state.last_ticker = ticker
                 try:
-                    save_analysis_summary(result, allow_local_fallback=False)
+                    save_analysis_summary(result, allow_local_fallback=False, user_id=user_id)
                     st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
                 except OSError as history_error:
                     logger.error(f"Unable to save MongoDB history: {history_error}")
@@ -968,6 +1070,7 @@ def main():
 
     render_beginner_recent_analyses()
     render_beginner_guide()
+    st.caption("Educational research only. This application does not provide financial advice, place trades, or connect to a broker. Review all data independently.")
 
     if st.session_state.analysis_result:
         state = st.session_state.analysis_result
