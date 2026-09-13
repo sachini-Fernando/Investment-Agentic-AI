@@ -31,6 +31,7 @@ from src.pipeline.local_history import load_persistent_history, save_analysis_su
 from src.tools.portfolio_tools import (  # noqa: E402
     calculate_portfolio_volatility,
     calculate_portfolio_summary,
+    calculate_stress_scenarios,
     load_portfolio,
     save_portfolio,
     suggest_rebalancing,
@@ -524,6 +525,18 @@ def render_portfolio_manager(_state=None):
             st.info("Add annual volatility for each holding to calculate portfolio-level volatility.")
         else:
             st.metric("Portfolio volatility", f"{portfolio_volatility:.2%}")
+
+        st.markdown("**Stress testing**")
+        stress_rows = [
+            {
+                "Scenario": item["scenario"],
+                "Estimated change": f"${item['estimated_change']:,.2f}",
+                "Estimated change %": f"{item['estimated_change_percent']:.2%}",
+                "Estimated portfolio value": f"${item['estimated_value']:,.2f}",
+            }
+            for item in calculate_stress_scenarios(summary["holdings"])
+        ]
+        st.dataframe(stress_rows, use_container_width=True, hide_index=True)
 
         display_rows = [
             {

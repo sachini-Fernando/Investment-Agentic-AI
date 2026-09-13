@@ -90,6 +90,33 @@ def calculate_portfolio_volatility(holdings: List[Dict[str, Any]]) -> Optional[f
     return None
 
 
+_STRESS_SCENARIOS = {
+    "Market falls 10%": {"Stocks": -0.10, "ETF": -0.10, "Crypto": -0.10, "Bonds": -0.03, "Cash": 0.0, "Other": -0.05},
+    "Interest rates increase": {"Stocks": -0.02, "ETF": -0.02, "Crypto": -0.03, "Bonds": -0.05, "Cash": 0.0, "Other": -0.02},
+    "Company earnings decline": {"Stocks": -0.08, "ETF": -0.04, "Crypto": -0.05, "Bonds": 0.0, "Cash": 0.0, "Other": -0.04},
+    "Negative news appears": {"Stocks": -0.05, "ETF": -0.02, "Crypto": -0.06, "Bonds": -0.01, "Cash": 0.0, "Other": -0.03},
+}
+
+
+def calculate_stress_scenarios(holdings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Estimate portfolio value changes under predefined educational shocks."""
+    normalized = [normalize_holding(item) for item in holdings if str(item.get("ticker", "")).strip()]
+    total_value = sum(item["current_value"] for item in normalized)
+    results = []
+    for scenario, shocks in _STRESS_SCENARIOS.items():
+        change = sum(
+            item["current_value"] * shocks.get(item["asset_type"], shocks["Other"])
+            for item in normalized
+        )
+        results.append({
+            "scenario": scenario,
+            "estimated_change": change,
+            "estimated_change_percent": change / total_value if total_value else 0.0,
+            "estimated_value": total_value + change,
+        })
+    return results
+
+
 def calculate_portfolio_summary(holdings: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Calculate portfolio totals, allocations, concentration, and income."""
     normalized = [normalize_holding(item) for item in holdings if str(item.get("ticker", "")).strip()]
@@ -129,6 +156,7 @@ def calculate_portfolio_summary(holdings: List[Dict[str, Any]]) -> Dict[str, Any
         "concentration_status": "Review" if concentration_alerts else "Within guide",
         "concentration_alerts": concentration_alerts,
         "portfolio_volatility": calculate_portfolio_volatility(normalized),
+        "stress_scenarios": calculate_stress_scenarios(normalized),
     }
 
 
