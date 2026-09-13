@@ -112,7 +112,6 @@ class MongoPipelineStore:
         common = {
             "analysis_id": analysis_id,
             "ticker": ticker,
-            "user_id": payload.get("user_id"),
             "recorded_at": recorded_at,
         }
 
@@ -160,7 +159,7 @@ class MongoPipelineStore:
         analysis = {
             "analysis_id": state.get("analysis_id") or create_analysis_id(ticker),
             "ticker": ticker,
-            "user_id": state.get("user_id") or (state.get("investor_profile") or {}).get("user_id"),
+            "user_id": state.get("user_id"),
             "analysis_input": {
                 "user_query": state.get("user_query"),
             },

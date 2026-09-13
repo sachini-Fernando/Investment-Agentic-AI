@@ -210,6 +210,7 @@ def run_investment_analysis(
     thread_id: Optional[str] = None,
     investor_profile: Optional[dict] = None,
     alert_rules: Optional[dict] = None,
+    user_id: Optional[str] = None,
 ):
     """
         Runs the investment analysis workflow for a given ticker.
@@ -232,6 +233,7 @@ def run_investment_analysis(
     initial_state: InvestmentState = {
         "analysis_id": analysis_id,
         "ticker": ticker,
+        "user_id": user_id,
         "user_query": user_query,
         "investor_profile": investor_profile,
         "portfolio_insights": None,
