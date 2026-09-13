@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Any
 from loguru import logger 
  
 from ..pipeline import MarketDataIngestion, NewsVectorStore 
+from ..utils.security import validate_ticker
  
 _INGESTION = MarketDataIngestion() 
 _VECTOR_STORE = NewsVectorStore()
@@ -28,7 +29,8 @@ def fetch_stock_data(ticker: str, period: str = "1y") -> Optional[Dict]:
     Returns: 
         Dictionary containing stock data or None if failed 
     """ 
-    try: 
+    try:
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching stock data for {ticker}") 
         snapshot = _INGESTION.fetch_yfinance_snapshot(ticker)
         alpha_quote = _INGESTION.fetch_alpha_vantage_quote(ticker)
@@ -68,7 +70,8 @@ def fetch_historical_prices(ticker: str, period: str = "1y", interval: str =
     Returns: 
         List of dictionaries containing historical price data or None if failed 
     """ 
-    try: 
+    try:
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching historical prices for {ticker}") 
         historical_data = _INGESTION.fetch_yfinance_history(ticker, period=period, interval=interval) 
         logger.info(f"Successfully fetched {len(historical_data)} historical data points for {ticker}") 
@@ -91,7 +94,8 @@ def fetch_company_info(ticker: str) -> Optional[Dict]:
     Returns: 
         Dictionary containing company information or None if failed 
     """ 
-    try: 
+    try:
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching company info for {ticker}") 
         bundle = _INGESTION.fetch_yfinance_fundamentals(ticker) 
         company_info = bundle.get("company_info", {}) 
@@ -113,7 +117,8 @@ def fetch_financial_statements(ticker: str) -> Optional[Dict]:
     Returns: 
         Dictionary containing financial statements or None if failed 
     """ 
-    try: 
+    try:
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching financial statements for {ticker}") 
         bundle = _INGESTION.fetch_yfinance_fundamentals(ticker) 
         financial_data = bundle.get("financial_statements") 
@@ -138,7 +143,8 @@ def fetch_news_articles(ticker: str, limit: int = 10) -> Optional[List[Dict]]:
     Returns: 
         List of dictionaries containing news articles or None if failed 
     """ 
-    try: 
+    try:
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching news articles for {ticker}") 
         company = fetch_company_info(ticker) or {} 
         articles = _INGESTION.fetch_newsapi_articles(ticker, company_name=company.get("name"), limit=limit) 
@@ -213,6 +219,7 @@ def fetch_all_data(ticker: str) -> Dict[str, Any]:
     Returns: 
         Dictionary containing all fetched data 
     """ 
+    ticker = validate_ticker(ticker)
     logger.info(f"Fetching all data for {ticker}") 
      
     bundle = _INGESTION.fetch_all(ticker) 

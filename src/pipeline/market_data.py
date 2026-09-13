@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from statistics import median
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +15,29 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from loguru import logger
+from ..utils.security import SlidingWindowRateLimiter, validate_ticker
+
+
+_PROVIDER_LIMITER = SlidingWindowRateLimiter(max_calls=5, window_seconds=60.0)
+
+
+def _provider_get(provider: str, url: str, **kwargs: Any) -> Any:
+    """Perform a rate-limited provider request with bounded 429 retries."""
+    for attempt in range(3):
+        _PROVIDER_LIMITER.check(provider)
+        response = requests.get(url, **kwargs)
+        if response.status_code != 429:
+            response.raise_for_status()
+            return response
+        retry_after = response.headers.get("Retry-After", "")
+        try:
+            delay = min(8.0, max(0.5, float(retry_after)))
+        except (TypeError, ValueError):
+            delay = 0.5 * (2 ** attempt)
+        if attempt == 2:
+            response.raise_for_status()
+        time.sleep(delay)
+    raise RuntimeError(f"{provider} request failed after retry limit")
 
 try:
     import pandas as pd
@@ -408,7 +432,8 @@ class MarketDataIngestion:
             return {}
 
         try:
-            response = requests.get(
+            response = _provider_get(
+                "alpha_vantage",
                 "https://www.alphavantage.co/query",
                 params={
                     "function": "GLOBAL_QUOTE",
@@ -417,7 +442,6 @@ class MarketDataIngestion:
                 },
                 timeout=20,
             )
-            response.raise_for_status()
             payload = response.json().get("Global Quote", {})
             if not payload:
                 return {}
@@ -446,7 +470,8 @@ class MarketDataIngestion:
             return {}
 
         try:
-            response = requests.get(
+            response = _provider_get(
+                "alpha_vantage",
                 "https://www.alphavantage.co/query",
                 params={
                     "function": "OVERVIEW",
@@ -455,7 +480,6 @@ class MarketDataIngestion:
                 },
                 timeout=20,
             )
-            response.raise_for_status()
             payload = response.json()
             if not payload or "Symbol" not in payload:
                 return {}
@@ -504,7 +528,8 @@ class MarketDataIngestion:
             return []
 
         try:
-            response = requests.get(
+            response = _provider_get(
+                "alpha_vantage",
                 "https://www.alphavantage.co/query",
                 params={
                     "function": "TIME_SERIES_DAILY_ADJUSTED",
@@ -514,7 +539,6 @@ class MarketDataIngestion:
                 },
                 timeout=20,
             )
-            response.raise_for_status()
             payload = response.json().get("Time Series (Daily)", {})
             records: List[Dict[str, Any]] = []
             for date, values in payload.items():
@@ -550,7 +574,8 @@ class MarketDataIngestion:
             query = f'("{ticker}" OR "{company_name}")'
 
         try:
-            response = requests.get(
+            response = _provider_get(
+                "newsapi",
                 "https://newsapi.org/v2/everything",
                 params={
                     "q": query,
@@ -561,7 +586,6 @@ class MarketDataIngestion:
                 },
                 timeout=20,
             )
-            response.raise_for_status()
             articles = []
             for item in response.json().get("articles", []):
                 url = item.get("url")
@@ -680,7 +704,7 @@ class MarketDataIngestion:
     def fetch_all(
         self, ticker: str, history_period: str = "2y", news_limit: int = 20
     ) -> Dict[str, Any]:
-        ticker = ticker.upper().strip()
+        ticker = validate_ticker(ticker)
         logger.info(f"Fetching multi-source data for {ticker}")
 
         yfinance_snapshot = self.fetch_yfinance_snapshot(ticker)
