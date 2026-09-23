@@ -427,6 +427,18 @@ def render_question_chat():
     return question, bool(submitted_question and submitted_question.strip())
 
 
+def render_answers_page(state):
+    """Render the focused landing page: only the answer to the user's question."""
+    section_title("message", "Questions & Answers", "teal")
+    if not state or not state.get("user_query"):
+        st.info("Ask a question below to receive an evidence-based answer for the selected ticker.")
+        return
+
+    answer = state.get("direct_answer") or "The available evidence was insufficient to answer this question confidently."
+    with st.chat_message("assistant"):
+        st.write(answer)
+
+
 def render_portfolio_fit(state):
     """Show how a single-stock view fits a diversified portfolio plan."""
     section_title("target", "Portfolio Fit & Rebalancing", "green", "Goal-based allocation, diversification, and concentration checks")
@@ -1414,7 +1426,6 @@ def render_analysis_page(state):
 def main():
     """Main Streamlit application."""
     load_theme()
-    render_header()
 
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
@@ -1422,12 +1433,23 @@ def main():
         st.session_state.last_ticker = None
 
     ticker, use_conditional, investor_profile, alert_rules, analyze_button = render_sidebar()
-    user_query, chat_submitted = render_question_chat()
-    analyze_button = analyze_button or chat_submitted
 
     if not st.session_state.get("authenticated"):
+        render_header()
         st.info("Please sign in to continue using the dashboard.")
         st.stop()
+
+    workspace_page = st.sidebar.radio(
+        "Workspace",
+        options=["Questions & Answers", "Analysis Details", "Portfolio Management"],
+        key="workspace_page",
+        help="Questions & Answers is the focused landing page. Detailed evidence is kept separately.",
+    )
+    user_query = st.session_state.get("chat_question", "")
+    chat_submitted = False
+    if workspace_page == "Questions & Answers":
+        user_query, chat_submitted = render_question_chat()
+    analyze_button = analyze_button or chat_submitted
 
     if analyze_button and ticker:
         if not st.session_state.get("trade_confirmed"):
@@ -1468,6 +1490,15 @@ def main():
                     logger.error(f"Streamlit analysis error: {str(e)}")
 
     render_trade_confirmation_dialog()
+    if workspace_page == "Questions & Answers":
+        render_answers_page(st.session_state.analysis_result)
+        return
+    if workspace_page == "Portfolio Management":
+        render_portfolio_manager()
+        return
+
+    # The remaining content is deliberately limited to the separate detailed
+    # analysis page; it is not shown on the Questions & Answers landing page.
     render_beginner_recent_analyses()
     render_beginner_guide()
 
@@ -1478,6 +1509,8 @@ def main():
 
         render_analysis_page(state)
     else:
+        st.info("Ask a question and run an analysis to view the detailed evidence.")
+        return
         selected_page = st.sidebar.radio(
             "Dashboard pages",
             options=["💼 Portfolio Management"],
