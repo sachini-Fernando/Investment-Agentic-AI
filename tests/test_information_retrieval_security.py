@@ -1,5 +1,6 @@
 from src.security.student_4_information_retrieval import (
     HallucinationRiskChecker,
+    IRPipelineSecurityAssessment,
     RetrievalManipulationDetector,
     RetrievalQualityChecker,
     evaluate_retrieval_cases,
@@ -75,3 +76,20 @@ def test_hallucination_risk_raises_when_evidence_is_missing():
 
     assert risk["risk_level"] in {"medium", "high"}
     assert risk["unsupported_claims"] >= 1
+
+
+def test_pipeline_security_assessment_compiles_summary():
+    assessment = IRPipelineSecurityAssessment().assess(
+        query="Summarize the latest Microsoft earnings call",
+        retrieved_results=[
+            {"title": "Microsoft earnings call summary", "snippet": "The company reported improved cloud revenue and margins.", "source": "https://www.microsoft.com"},
+            {"title": "Unverified forum post", "snippet": "The market is rigged by insiders.", "source": "http://example.com"},
+        ],
+        answer="Microsoft revenues are up because the CEO confirmed the company is being secretly manipulated by state actors.",
+        source_policy={"allowed_domains": ["microsoft.com", "www.microsoft.com"]},
+        auth_context={"authenticated": True, "role": "analyst"},
+        api_context={"endpoint": "https://api.internal.example.com/search", "allowed_protocols": ["https"], "requires_auth": True},
+    )
+
+    assert assessment["overall_status"] in {"pass", "warning", "fail"}
+    assert "retrieval_manipulation" in assessment["findings"] or "hallucination_risk" in assessment["findings"]

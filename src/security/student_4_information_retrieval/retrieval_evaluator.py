@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urlparse
 
 
 class RetrievalQualityChecker:
@@ -203,10 +204,159 @@ class HallucinationRiskChecker:
         }
 
 
+class SourceReliabilityChecker:
+    """Checks whether retrieved sources are trusted and transport-safe."""
+
+    @staticmethod
+    def _extract_domain(source: str) -> str:
+        parsed = urlparse(source if source.startswith(("http://", "https://")) else f"https://{source}")
+        host = parsed.netloc or parsed.path or ""
+        return host.lower().replace("www.", "")
+
+    def assess(self, results: list[dict], source_policy: dict | None = None) -> dict:
+        source_policy = source_policy or {}
+        allowed_domains = {str(domain).lower().replace("www.", "") for domain in source_policy.get("allowed_domains", [])}
+        trusted = []
+        untrusted = []
+        warnings = []
+
+        for item in results or []:
+            source = str(item.get("source") or item.get("url") or item.get("domain") or "").strip()
+            if not source:
+                warnings.append("Missing source URL")
+                continue
+            domain = self._extract_domain(source)
+            if source.startswith("http://"):
+                warnings.append(f"Insecure protocol for {domain or source}")
+            if domain and (domain in allowed_domains or any(domain.endswith(f".{allowed}") for allowed in allowed_domains)):
+                trusted.append(domain)
+            elif domain:
+                untrusted.append(domain)
+
+        if untrusted:
+            status = "fail" if not allowed_domains else "warning"
+        elif warnings:
+            status = "warning"
+        else:
+            status = "pass"
+
+        return {
+            "status": status,
+            "trusted_sources": sorted(set(trusted)),
+            "untrusted_sources": sorted(set(untrusted)),
+            "warnings": warnings,
+            "allowed_domains": sorted(allowed_domains),
+        }
+
+
+class AuthenticationAuthorizationChecker:
+    """Validates that IR calls are authenticated and authorized for the caller role."""
+
+    def assess(self, auth_context: dict | None = None) -> dict:
+        auth_context = auth_context or {}
+        authenticated = bool(auth_context.get("authenticated", False))
+        role = str(auth_context.get("role", "")).lower()
+        allowed_roles = {"analyst", "researcher", "admin"}
+
+        if not authenticated:
+            status = "fail"
+            reason = "Authentication is required before accessing retrieval services."
+        elif role not in allowed_roles:
+            status = "warning"
+            reason = f"Role '{role or 'unknown'}' is not in the allowed retrieval roles."
+        else:
+            status = "pass"
+            reason = f"Role '{role}' is permitted."
+
+        return {
+            "status": status,
+            "authenticated": authenticated,
+            "role": role,
+            "reason": reason,
+        }
+
+
+class ApiSecurityChecker:
+    """Validates retrieval API exposure and secure transport policy."""
+
+    def assess(self, api_context: dict | None = None) -> dict:
+        api_context = api_context or {}
+        endpoint = str(api_context.get("endpoint") or "").strip()
+        allowed_protocols = {str(protocol).lower() for protocol in api_context.get("allowed_protocols", ["https"])}
+        requires_auth = bool(api_context.get("requires_auth", True))
+
+        if not endpoint:
+            return {"status": "warning", "reason": "No API endpoint was provided for the retrieval service."}
+
+        scheme = urlparse(endpoint).scheme.lower()
+        if scheme and scheme not in allowed_protocols:
+            return {"status": "fail", "reason": f"Protocol '{scheme}' is not allowed for this retrieval API.", "endpoint": endpoint}
+        if scheme == "http":
+            return {"status": "fail", "reason": "HTTP is not permitted for retrieval API traffic.", "endpoint": endpoint}
+        if requires_auth and not api_context.get("auth_enabled", True):
+            return {"status": "fail", "reason": "The retrieval API requires authentication but auth is disabled.", "endpoint": endpoint}
+
+        return {"status": "pass", "reason": "Endpoint meets the configured secure transport and auth requirements.", "endpoint": endpoint}
+
+
+class IRPipelineSecurityAssessment:
+    """Aggregates core retrieval security controls into one assessment."""
+
+    def assess(
+        self,
+        query: str,
+        retrieved_results: list[dict],
+        answer: str,
+        source_policy: dict | None = None,
+        auth_context: dict | None = None,
+        api_context: dict | None = None,
+    ) -> dict:
+        manipulation = RetrievalManipulationDetector().inspect(query, "\n".join(
+            item.get("snippet", "") for item in retrieved_results or []
+        ))
+        hallucination = HallucinationRiskChecker().assess(query, retrieved_results, answer)
+        source = SourceReliabilityChecker().assess(retrieved_results, source_policy)
+        auth = AuthenticationAuthorizationChecker().assess(auth_context)
+        api = ApiSecurityChecker().assess(api_context)
+
+        findings = []
+        if manipulation["blocked"]:
+            findings.append("retrieval_manipulation")
+        if hallucination["risk_level"] in {"medium", "high"}:
+            findings.append("hallucination_risk")
+        if source["status"] != "pass":
+            findings.append("source_reliability")
+        if auth["status"] != "pass":
+            findings.append("authentication_authorization")
+        if api["status"] != "pass":
+            findings.append("api_security")
+
+        if not findings:
+            overall_status = "pass"
+        elif len(findings) <= 2:
+            overall_status = "warning"
+        else:
+            overall_status = "fail"
+
+        return {
+            "overall_status": overall_status,
+            "findings": findings,
+            "retrieval_manipulation": manipulation,
+            "hallucination_risk": hallucination,
+            "source_reliability": source,
+            "authentication_authorization": auth,
+            "api_security": api,
+        }
+
+
 __all__ = [
     "RetrievalQualityChecker",
     "RetrievalManipulationDetector",
     "HallucinationRiskChecker",
+    "SourceReliabilityChecker",
+    "AuthenticationAuthorizationChecker",
+    "ApiSecurityChecker",
+    "IRPipelineSecurityAssessment",
     "evaluate_cases",
     "evaluate_directory",
     "evaluate_retrieval_cases",
