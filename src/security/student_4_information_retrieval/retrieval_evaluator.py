@@ -147,9 +147,66 @@ class RetrievalManipulationDetector:
         }
 
 
+class HallucinationRiskChecker:
+    """Flags answers that are not grounded in the retrieved evidence."""
+
+    SUSPICIOUS_CLAIMS = [
+        "admitted fraud",
+        "secretly",
+        "rigged",
+        "state actors",
+        "cover up",
+        "guaranteed",
+        "insider conspiracy",
+    ]
+
+    @staticmethod
+    def _normalize_text(value: Any) -> str:
+        return " ".join(re.findall(r"[a-zA-Z0-9]+", str(value or "").lower()))
+
+    def assess(self, query: str, retrieved_results: list[dict], answer: str) -> dict:
+        evidence_text = " ".join(
+            f"{item.get('title', '')} {item.get('snippet', '')} {item.get('summary', '')} {item.get('content', '')}"
+            for item in retrieved_results or []
+        )
+        evidence_terms = set(self._normalize_text(evidence_text).split())
+        answer_terms = set(self._normalize_text(answer).split())
+        overlap = len(answer_terms & evidence_terms) / max(1, len(answer_terms))
+        suspicious_hits = [term for term in self.SUSPICIOUS_CLAIMS if term in self._normalize_text(answer)]
+        unsupported_claims = 0
+        findings = []
+
+        if not retrieved_results:
+            unsupported_claims += 1
+            findings.append("no evidence retrieved")
+        if suspicious_hits:
+            unsupported_claims += len(suspicious_hits)
+            findings.append("unsupported narrative claim")
+        if overlap < 0.2:
+            unsupported_claims += 1
+            findings.append("low evidence overlap")
+
+        risk_score = min(1.0, (unsupported_claims / 3) + max(0.0, 0.5 - overlap))
+        if risk_score >= 0.7 or unsupported_claims >= 2:
+            risk_level = "high"
+        elif risk_score >= 0.4 or unsupported_claims:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        return {
+            "risk_level": risk_level,
+            "risk_score": round(risk_score, 3),
+            "unsupported_claims": unsupported_claims,
+            "evidence_coverage": round(overlap, 3),
+            "findings": findings,
+        }
+
+
 __all__ = [
     "RetrievalQualityChecker",
     "RetrievalManipulationDetector",
+    "HallucinationRiskChecker",
     "evaluate_cases",
     "evaluate_directory",
     "evaluate_retrieval_cases",

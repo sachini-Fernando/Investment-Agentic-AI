@@ -1,4 +1,5 @@
 from src.security.student_4_information_retrieval import (
+    HallucinationRiskChecker,
     RetrievalManipulationDetector,
     RetrievalQualityChecker,
     evaluate_retrieval_cases,
@@ -60,3 +61,17 @@ def test_retrieval_manipulation_is_detected():
 
     assert decision["blocked"] is True
     assert "instruction_override" in decision["categories"]
+
+
+def test_hallucination_risk_raises_when_evidence_is_missing():
+    checker = HallucinationRiskChecker()
+    risk = checker.assess(
+        query="What caused the drop in NVIDIA earnings?",
+        retrieved_results=[
+            {"title": "Chip demand outlook", "snippet": "Demand remains strong for AI accelerators."},
+        ],
+        answer="NVIDIA earnings fell because the company admitted fraud and a data leak caused a 70% stock plunge."
+    )
+
+    assert risk["risk_level"] in {"medium", "high"}
+    assert risk["unsupported_claims"] >= 1
