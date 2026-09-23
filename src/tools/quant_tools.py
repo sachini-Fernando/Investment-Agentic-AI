@@ -56,7 +56,7 @@ def _prepare_prices_dataframe(prices: List[Dict[str, Any]]) -> Any:
             df[column] = pd.to_numeric(df[column], errors="coerce")
 
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["date"] = pd.to_datetime(df["date"], errors="coerce", utc=True)
         df = df.sort_values("date")
 
     df = df.ffill().bfill()

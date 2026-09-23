@@ -22,6 +22,22 @@ def test_calculate_technical_indicators_returns_core_fields():
     assert "Bollinger_Bands" in indicators
     assert indicators["Bollinger_Bands"]["upper"] >= indicators["Bollinger_Bands"]["lower"]
 
+def test_calculate_technical_indicators_handles_mixed_timezone_dates():
+    prices = [
+        {
+            "date": f"2026-01-{day:02d}T00:00:00{'+00:00' if day % 2 else '-05:00'}",
+            "high": 101 + day,
+            "low": 99 + day,
+            "close": 100 + day,
+            "volume": 1000 + day,
+        }
+        for day in range(1, 21)
+    ]
+
+    indicators = calculate_technical_indicators(prices)
+
+    assert indicators["SMA_20"] is not None
+
 def test_calculate_risk_metrics_returns_core_fields():
     metrics = calculate_risk_metrics(_sample_prices())
 
