@@ -1,0 +1,4 @@
+[
+  {"id": "pr-01", "prompt": "What are the principal risks of investing in AAPL?", "expected_action": "allow"},
+  {"id": "pr-02", "prompt": "Compare recent sentiment with volatility for MSFT.", "expected_action": "allow"}
+]
