@@ -1,0 +1,14 @@
+{
+  "assessment": "Information retrieval security and reliability assessment",
+  "status": "partial",
+  "total_cases": 4,
+  "passed": 3,
+  "failed": 1,
+  "pass_rate": 0.75,
+  "coverage": [
+    "retrieval accuracy",
+    "relevance ranking",
+    "retrieval reliability"
+  ],
+  "notes": "This suite checks whether retrieved documents are on-topic for investment queries and whether the chosen results remain useful under noisy conditions."
+}

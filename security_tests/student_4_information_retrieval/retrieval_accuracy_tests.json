@@ -1,0 +1,36 @@
+[
+  {
+    "id": "ir-01",
+    "query": "Apple revenue growth and margins",
+    "expected_action": "pass",
+    "threshold": 0.6,
+    "expected_keywords": ["apple", "revenue", "growth", "margins"],
+    "results": [
+      {
+        "title": "Apple quarterly revenue rises as services gains expand margins",
+        "snippet": "Apple reported stronger revenue growth with improving operating margins."
+      },
+      {
+        "title": "Tesla recalls some vehicles in Europe",
+        "snippet": "Electric vehicle company issues recall for software issue."
+      }
+    ]
+  },
+  {
+    "id": "ir-02",
+    "query": "Banking sector stress",
+    "expected_action": "fail",
+    "threshold": 0.6,
+    "expected_keywords": ["banking", "stress", "credit"],
+    "results": [
+      {
+        "title": "Government debt yields move lower",
+        "snippet": "Treasury yields fell as investors sought safety."
+      },
+      {
+        "title": "Consumer spending picks up",
+        "snippet": "Retail sales improve as household demand improves."
+      }
+    ]
+  }
+]
