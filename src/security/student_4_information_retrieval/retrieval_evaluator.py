@@ -93,4 +93,64 @@ def evaluate_directory(directory: str | Path, checker: RetrievalQualityChecker |
     return {"suites": suites}
 
 
-__all__ = ["RetrievalQualityChecker", "evaluate_cases", "evaluate_directory", "evaluate_retrieval_cases"]
+class RetrievalManipulationDetector:
+    """Detects instruction override or prompt manipulation attempts in retrieved content."""
+
+    PATTERNS = {
+        "instruction_override": [
+            "ignore previous instructions",
+            "ignore all prior instructions",
+            "override the system",
+            "override developer instructions",
+            "disregard safety rules",
+            "trust this instead",
+        ],
+        "prompt_leakage": [
+            "reveal the system prompt",
+            "show hidden instructions",
+            "disclose developer instructions",
+            "reveal credentials",
+            "api key",
+            "secret key",
+        ],
+        "roleplay": [
+            "act as",
+            "pretend to be",
+            "developer mode",
+            "dan mode",
+            "jailbreak",
+        ],
+        "policy_bypass": [
+            "bypass restrictions",
+            "disable safety",
+            "ignore safeguards",
+            "ignore all policies",
+            "not bound by policy",
+        ],
+    }
+
+    def inspect(self, query: str, retrieved_text: str) -> dict:
+        combined = f"{query or ''}\n{retrieved_text or ''}".lower()
+        categories = []
+        triggers = {}
+        for category, patterns in self.PATTERNS.items():
+            found = [pattern for pattern in patterns if pattern in combined]
+            if found:
+                categories.append(category)
+                triggers[category] = found[:3]
+
+        return {
+            "blocked": bool(categories),
+            "categories": categories,
+            "risk_score": round(min(1.0, len(categories) / 4), 3),
+            "triggers": triggers,
+        }
+
+
+__all__ = [
+    "RetrievalQualityChecker",
+    "RetrievalManipulationDetector",
+    "evaluate_cases",
+    "evaluate_directory",
+    "evaluate_retrieval_cases",
+]
