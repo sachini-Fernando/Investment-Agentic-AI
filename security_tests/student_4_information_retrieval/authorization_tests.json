@@ -1,0 +1,29 @@
+[
+  {
+    "id": "ir-authz-01",
+    "auth_context": {
+      "authenticated": true,
+      "role": "analyst"
+    },
+    "expected_action": "pass",
+    "notes": "Analyst role is allowed to perform retrieval for approved research workflows."
+  },
+  {
+    "id": "ir-authz-02",
+    "auth_context": {
+      "authenticated": true,
+      "role": "guest"
+    },
+    "expected_action": "warning",
+    "notes": "Guest access is not a privileged role and should be restricted to public metadata only."
+  },
+  {
+    "id": "ir-authz-03",
+    "auth_context": {
+      "authenticated": true,
+      "role": "external_partner"
+    },
+    "expected_action": "fail",
+    "notes": "External partner accounts should be denied access to internal research corpus queries."
+  }
+]
