@@ -5,3 +5,6 @@
 {"timestamp": "2026-09-13T14:44:46.959158+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
 {"timestamp": "2026-09-13T14:44:53.760249+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "MSFT", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
 {"timestamp": "2026-09-13T15:04:23.837796+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-19T07:06:08.303105+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
+{"timestamp": "2026-09-19T07:06:17.765057+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-19T07:07:03.840545+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "NVDA", "error": "MONGODB_URI environment variable is not set. Please set it in your .env file or environment."}, "outcome": "failure"}
