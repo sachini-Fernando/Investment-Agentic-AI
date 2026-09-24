@@ -32,5 +32,22 @@
         "snippet": "Retail sales improve as household demand improves."
       }
     ]
+  },
+  {
+    "id": "ir-03",
+    "query": "Semiconductor supply chain bottlenecks",
+    "expected_action": "pass",
+    "threshold": 0.5,
+    "expected_keywords": ["semiconductor", "supply", "chain", "bottleneck"],
+    "results": [
+      {
+        "title": "Semiconductor supply chain bottlenecks persist across Asia",
+        "snippet": "Manufacturers continue to report supply chain delays and component shortages."
+      },
+      {
+        "title": "Oil producers maintain output discipline",
+        "snippet": "Energy prices stay elevated as producers cap output."
+      }
+    ]
   }
 ]

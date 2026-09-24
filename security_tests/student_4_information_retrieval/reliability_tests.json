@@ -32,5 +32,22 @@
         "snippet": "Dollar index turns lower as traders reassess central bank signals."
       }
     ]
+  },
+  {
+    "id": "ir-rel-03",
+    "query": "Consumer sentiment slowdown",
+    "expected_action": "fail",
+    "threshold": 0.6,
+    "expected_keywords": ["consumer", "sentiment", "slowdown"],
+    "results": [
+      {
+        "title": "Commodity prices rebound after weather event",
+        "snippet": "Natural gas and crude prices rise as traders reposition ahead of seasonal demand."
+      },
+      {
+        "title": "Labor market remains resilient",
+        "snippet": "Employers continue to add staff even as wage growth cools."
+      }
+    ]
   }
 ]
