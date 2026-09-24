@@ -1,0 +1,36 @@
+[
+  {
+    "id": "ir-rel-01",
+    "query": "Nvidia chip demand outlook",
+    "expected_action": "pass",
+    "threshold": 0.5,
+    "expected_keywords": ["nvidia", "chip", "demand", "ai"],
+    "results": [
+      {
+        "title": "NVIDIA AI chip demand remains strong",
+        "snippet": "Analysts expect robust demand for AI accelerators."
+      },
+      {
+        "title": "Oil prices rise after supply news",
+        "snippet": "Crude markets move sharply after supply disruption."
+      }
+    ]
+  },
+  {
+    "id": "ir-rel-02",
+    "query": "Market concentration risk",
+    "expected_action": "pass",
+    "threshold": 0.5,
+    "expected_keywords": ["market", "concentration", "risk"],
+    "results": [
+      {
+        "title": "Portfolio concentration risk increases in tech stocks",
+        "snippet": "Analysts warn that market concentration may be elevated across large-cap technology names."
+      },
+      {
+        "title": "Currency values drift amid policy speculation",
+        "snippet": "Dollar index turns lower as traders reassess central bank signals."
+      }
+    ]
+  }
+]
