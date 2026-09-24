@@ -1,0 +1,7 @@
+ID,Test IDs,Vulnerability,Asset or data,Impact,Likelihood,Risk level,Evidence,Recommended mitigation,Status
+V-01,T02,Known default credentials,User account,Unauthorized account access,High,High,TODO,Remove defaults and force unique setup,Open
+V-02,T04;T06,History access or anonymous-record exposure,Queries and analysis history,Cross-user privacy disclosure,High,High,TODO,Enforce deny-by-default authorization server side,Open
+V-03,T07;T08,Unencrypted local history and excess fields,Queries and generated answers,Local data disclosure,Medium,High,TODO,Encrypt/minimize/expire local records,Open
+V-04,T09;T10,Audit log retains submitted identifiers or details,Audit records,Privacy and forensic-data exposure,Medium,Medium,TODO,Redact and restrict audit logs,Open
+V-05,T11;T15,No verified deletion/export control,Retained user history,Loss of user control and compliance risk,Medium,Medium,TODO,Implement authenticated export and deletion with retention policy,Open
+V-06,T13;T14,Full-state and local secret persistence paths,Queries portfolio context and secrets,Expanded breach impact,High,Medium,TODO,Minimize fields and use a secret manager,Open
