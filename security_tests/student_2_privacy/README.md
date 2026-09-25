@@ -12,7 +12,17 @@ student_2_privacy/
   report_template.md
   evidence/README.md
   findings/risk_register.csv
+
+src/security/student_2_privacy/
+   __init__.py
+   privacy_controls.py
+   privacy_evaluator.py
 ```
+
+The `security_tests` folder contains assessment inputs, executable assessment
+tests, evidence, and report material. The `src/security` folder contains
+reusable privacy-security code, following the same pattern as Student 1's
+prompt-security implementation.
 
 ## Step-by-step execution
 
