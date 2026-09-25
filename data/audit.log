@@ -55,3 +55,4 @@
 {"timestamp": "2026-09-24T08:04:54.387445+00:00", "user_id": "sachini", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
 {"timestamp": "2026-09-24T08:07:16.111675+00:00", "user_id": "sachini", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Nvidia chip demand outlook"}, "outcome": "success"}
 >>>>>>> 7612e215e4ef17a317f85eb270cf1a436ef0aede
+{"timestamp": "2026-09-25T06:13:55.100381+00:00", "user_id": "demo", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
