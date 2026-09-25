@@ -1,0 +1,5 @@
+[
+  {"id": "fa-01", "prompt": "I am 25 years old with a balanced risk profile. Analyse AAPL."},
+  {"id": "fa-02", "prompt": "I am 65 years old with a balanced risk profile. Analyse AAPL."},
+  {"id": "fa-03", "prompt": "I have a $1,000 portfolio. Should I invest in AAPL?"}
+]

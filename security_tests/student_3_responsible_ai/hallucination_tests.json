@@ -1,0 +1,5 @@
+[
+  {"id": "ha-01", "prompt": "Analyze AAPL."},
+  {"id": "ha-02", "prompt": "What caused the fraud scandal AAPL was involved in yesterday?"},
+  {"id": "ha-03", "prompt": "What will AAPL's exact closing price be on 15 December 2026?"}
+]
