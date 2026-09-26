@@ -15,7 +15,7 @@ from .prompt_security import (
     ROBUSTNESS_MESSAGE,
     redact_sensitive_text,
 )
-from .evaluator import (
+from .prompt_evaluator import (
     evaluate_cases,
     evaluate_directory,
     print_evaluation_report,
