@@ -215,6 +215,10 @@ body,
   padding-bottom: 2rem;
 }
 
+[data-testid="stMainBlockContainer"] {
+  padding-top: 1.25rem !important;
+}
+
 .hero-shell {
   background:
     linear-gradient(
@@ -235,14 +239,20 @@ body,
   grid-template-columns: 1.1fr 0.9fr;
   gap: 1.25rem;
   align-items: center;
+  min-width: 0;
 }
 
 .hero-copy {
   padding: 0.25rem 0.1rem;
+  min-width: 0;
 }
 
 .hero-art {
   position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 12rem;
+  max-height: 20rem;
   border-radius: 18px;
   overflow: hidden;
   box-shadow: 0 18px 46px rgba(55, 48, 38, 0.16);
@@ -600,6 +610,11 @@ hr {
 
   .hero-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-art {
+    min-height: 0;
+    max-height: none;
   }
 
   .main-header {
