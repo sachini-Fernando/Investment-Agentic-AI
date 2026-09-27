@@ -298,6 +298,17 @@ class PromptAttackDetector:
         candidate = str(text or "")
         findings: List[AttackFinding] = []
 
+        # Empty and whitespace-only queries are rejected by the gateway; report
+        # them here too so detector-level assessments agree with that policy.
+        if not candidate.strip():
+            return [AttackFinding(
+                category="empty_input",
+                severity="low",
+                pattern="Empty or whitespace-only input",
+                span=(0, len(candidate)),
+                area="prompt_robustness",
+            )]
+
         # Length check (DoS robustness)
         if len(candidate) > self.max_input_length:
             findings.append(AttackFinding(
