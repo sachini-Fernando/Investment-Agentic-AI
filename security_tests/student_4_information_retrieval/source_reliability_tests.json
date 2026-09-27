@@ -1,0 +1,52 @@
+[
+  {
+    "id": "ir-src-01",
+    "query": "Latest quarterly earnings summary",
+    "results": [
+      {
+        "title": "Microsoft earnings call summary",
+        "snippet": "Cloud revenue and margins improved.",
+        "source": "https://www.microsoft.com/en-us/investor/events"
+      }
+    ],
+    "source_policy": {
+      "allowed_domains": ["microsoft.com", "www.microsoft.com"]
+    },
+    "expected_action": "pass"
+  },
+  {
+    "id": "ir-src-02",
+    "query": "Unverified market rumor review",
+    "results": [
+      {
+        "title": "Anonymous forum post",
+        "snippet": "Insiders say the market is rigged.",
+        "source": "http://example.com/forum/rumor"
+      }
+    ],
+    "source_policy": {
+      "allowed_domains": ["microsoft.com", "www.microsoft.com"]
+    },
+    "expected_action": "fail"
+  },
+  {
+    "id": "ir-src-03",
+    "query": "Data source integrity check",
+    "results": [
+      {
+        "title": "Security bulletin",
+        "snippet": "Patch version includes a fix for an exploited library.",
+        "source": "https://security.example.com/bulletin"
+      },
+      {
+        "title": "Blog commentary",
+        "snippet": "This issue is less important than the press says.",
+        "source": "http://blog.example.com/commentary"
+      }
+    ],
+    "source_policy": {
+      "allowed_domains": ["security.example.com"]
+    },
+    "expected_action": "warning"
+  }
+]

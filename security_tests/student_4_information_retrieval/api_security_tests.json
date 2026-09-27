@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ir-api-01",
+    "api_context": {
+      "endpoint": "https://api.internal.example.com/search",
+      "allowed_protocols": ["https"],
+      "requires_auth": true,
+      "auth_enabled": true
+    },
+    "expected_action": "pass",
+    "notes": "TLS endpoint with required authentication enabled is compliant."
+  },
+  {
+    "id": "ir-api-02",
+    "api_context": {
+      "endpoint": "http://api.internal.example.com/search",
+      "allowed_protocols": ["https"],
+      "requires_auth": true,
+      "auth_enabled": true
+    },
+    "expected_action": "fail",
+    "notes": "Plain HTTP violates secure transport policy and exposes requests to interception."
+  },
+  {
+    "id": "ir-api-03",
+    "api_context": {
+      "endpoint": "https://api.internal.example.com/search",
+      "allowed_protocols": ["https"],
+      "requires_auth": true,
+      "auth_enabled": false
+    },
+    "expected_action": "fail",
+    "notes": "API is configured to require authentication but auth is disabled, allowing unauthenticated access."
+  }
+]

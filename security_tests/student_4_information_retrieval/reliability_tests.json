@@ -1,0 +1,53 @@
+[
+  {
+    "id": "ir-rel-01",
+    "query": "Nvidia chip demand outlook",
+    "expected_action": "pass",
+    "threshold": 0.5,
+    "expected_keywords": ["nvidia", "chip", "demand", "ai"],
+    "results": [
+      {
+        "title": "NVIDIA AI chip demand remains strong",
+        "snippet": "Analysts expect robust demand for AI accelerators."
+      },
+      {
+        "title": "Oil prices rise after supply news",
+        "snippet": "Crude markets move sharply after supply disruption."
+      }
+    ]
+  },
+  {
+    "id": "ir-rel-02",
+    "query": "Market concentration risk",
+    "expected_action": "pass",
+    "threshold": 0.5,
+    "expected_keywords": ["market", "concentration", "risk"],
+    "results": [
+      {
+        "title": "Portfolio concentration risk increases in tech stocks",
+        "snippet": "Analysts warn that market concentration may be elevated across large-cap technology names."
+      },
+      {
+        "title": "Currency values drift amid policy speculation",
+        "snippet": "Dollar index turns lower as traders reassess central bank signals."
+      }
+    ]
+  },
+  {
+    "id": "ir-rel-03",
+    "query": "Consumer sentiment slowdown",
+    "expected_action": "fail",
+    "threshold": 0.6,
+    "expected_keywords": ["consumer", "sentiment", "slowdown"],
+    "results": [
+      {
+        "title": "Commodity prices rebound after weather event",
+        "snippet": "Natural gas and crude prices rise as traders reposition ahead of seasonal demand."
+      },
+      {
+        "title": "Labor market remains resilient",
+        "snippet": "Employers continue to add staff even as wage growth cools."
+      }
+    ]
+  }
+]

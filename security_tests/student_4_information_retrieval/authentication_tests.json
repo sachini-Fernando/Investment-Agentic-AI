@@ -1,0 +1,26 @@
+[
+  {
+    "id": "ir-auth-01",
+    "auth_context": {
+      "authenticated": true,
+      "role": "analyst"
+    },
+    "expected_action": "pass"
+  },
+  {
+    "id": "ir-auth-02",
+    "auth_context": {
+      "authenticated": false,
+      "role": "guest"
+    },
+    "expected_action": "fail"
+  },
+  {
+    "id": "ir-auth-03",
+    "auth_context": {
+      "authenticated": true,
+      "role": "guest"
+    },
+    "expected_action": "warning"
+  }
+]

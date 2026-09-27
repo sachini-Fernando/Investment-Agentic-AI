@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ir-proto-01",
+    "transport": {
+      "scheme": "https",
+      "tls_version": "1.3",
+      "certificate_validation": true,
+      "headers": ["authorization", "content-type"]
+    },
+    "expected_action": "pass",
+    "notes": "Secure transport settings and certificate validation are enabled."
+  },
+  {
+    "id": "ir-proto-02",
+    "transport": {
+      "scheme": "http",
+      "tls_version": "none",
+      "certificate_validation": false,
+      "headers": ["authorization", "content-type"]
+    },
+    "expected_action": "fail",
+    "notes": "HTTP without TLS allows tampering, credential exposure, and retrieval data injection."
+  },
+  {
+    "id": "ir-proto-03",
+    "transport": {
+      "scheme": "https",
+      "tls_version": "1.2",
+      "certificate_validation": false,
+      "headers": ["authorization", "content-type", "x-debug-token"]
+    },
+    "expected_action": "warning",
+    "notes": "TLS is present but certificate validation is off and debug headers can leak metadata."
+  }
+]
