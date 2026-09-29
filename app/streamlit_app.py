@@ -19,6 +19,7 @@ from loguru import logger
 from src.utils.security import (
     authenticate_user,
     check_rate_limit,
+    create_user,
     ensure_default_user,
     get_secret,
     log_audit_event,
@@ -120,8 +121,13 @@ def render_sign_in_dialog():
     if st.session_state.get("authenticated"):
         return
 
-    if st.sidebar.button("Sign in", key="open_signin_modal"):
+    sign_in_col, create_account_col = st.sidebar.columns(2)
+    if sign_in_col.button("Sign in", key="open_signin_modal", use_container_width=True):
         st.session_state.show_signin_modal = True
+        st.session_state.show_create_account_modal = False
+    if create_account_col.button("Create account", key="open_create_account_modal", use_container_width=True):
+        st.session_state.show_create_account_modal = True
+        st.session_state.show_signin_modal = False
 
     if st.session_state.get("show_signin_modal"):
         @st.dialog("Sign in")
@@ -146,7 +152,39 @@ def render_sign_in_dialog():
 
         sign_in_modal()
 
-    st.sidebar.info("Sign in to unlock your private analyses and account-scoped history.")
+    if st.session_state.get("show_create_account_modal"):
+        @st.dialog("Create your account")
+        def create_account_modal():
+            st.caption("Create a private workspace for your investment analyses.")
+            with st.form("create_account_form"):
+                username = st.text_input("Username", placeholder="Choose a username")
+                password = st.text_input("Password", type="password", help="Use at least 8 characters.")
+                confirm_password = st.text_input("Confirm password", type="password")
+                submitted = st.form_submit_button("Create account", type="primary", use_container_width=True)
+
+            if submitted:
+                if password != confirm_password:
+                    st.error("The passwords do not match.")
+                    return
+                try:
+                    user_id = create_user(username, password)
+                except ValueError as exc:
+                    st.error(str(exc))
+                    return
+                except OSError:
+                    logger.exception("Unable to save a new account")
+                    st.error("The account could not be saved. Please try again.")
+                    return
+
+                st.session_state.user_id = user_id
+                st.session_state.authenticated = True
+                st.session_state.show_create_account_modal = False
+                log_audit_event(user_id, "account_created", {"source": "streamlit"}, "success")
+                st.rerun()
+
+        create_account_modal()
+
+    st.sidebar.info("Sign in or create an account to access your private analyses and account-scoped history.")
 
 
 def render_user_profile_panel():
@@ -1438,6 +1476,10 @@ def main():
         render_header()
         st.info("Please sign in to continue using the dashboard.")
         st.stop()
+
+    # Keep the dashboard's identity and primary heading visible after sign-in
+    # as well as on the sign-in screen.
+    render_header()
 
     workspace_page = st.sidebar.radio(
         "Workspace",

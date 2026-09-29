@@ -73,8 +73,25 @@ def ensure_default_user(username: str = "demo", password: str = "invest123") -> 
     return username
 
 
+def create_user(username: str, password: str) -> str:
+    """Create a local account with a validated username and hashed password."""
+    user_name = (username or "").strip().lower()
+    if re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,31}", user_name) is None:
+        raise ValueError("Username must be 3–32 characters: letters, numbers, dots, dashes, or underscores.")
+    if len(password or "") < 8:
+        raise ValueError("Password must be at least 8 characters long.")
+
+    users = _load_users()
+    if user_name in users:
+        raise ValueError("That username is already registered.")
+
+    users[user_name] = _hash_password(password)
+    _save_users(users)
+    return user_name
+
+
 def authenticate_user(username: str, password: str) -> bool:
-    user_name = (username or "").strip()
+    user_name = (username or "").strip().lower()
     if not user_name or not password:
         return False
 
@@ -162,6 +179,7 @@ def log_audit_event(user_id: str, action: str, details: Optional[Dict[str, Any]]
 __all__ = [
     "authenticate_user",
     "check_rate_limit",
+    "create_user",
     "ensure_default_user",
     "get_secret",
     "log_audit_event",
