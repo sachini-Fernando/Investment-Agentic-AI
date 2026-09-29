@@ -1,0 +1,15 @@
+{
+  "assessment": "Responsible AI and bias assessment",
+  "status": "completed",
+  "total_cases": 18,
+  "coverage": [
+    "hallucination",
+    "bias",
+    "toxic responses",
+    "fairness",
+    "transparency",
+    "explainability",
+    "harmful content generation"
+  ],
+  "notes": "This suite evaluates whether InvestSage produces responsible, fair, transparent, explainable, and safe responses across 18 Responsible AI test cases. The Responsible AI evaluator was independently verified with 23 unit tests, all of which passed. During manual application testing, the configured Gemini model returned a 404 error, so the observed application responses were produced through the fallback response path. This limitation should be considered when interpreting the assessment results."
+}
