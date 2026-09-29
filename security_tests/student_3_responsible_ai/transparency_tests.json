@@ -1,0 +1,12 @@
+[
+  {
+    "id": "tr-01",
+    "prompt": "What data did you use, how recent is it, which parts are predictions, and how reliable is this recommendation?",
+    "expected_action": "disclose_data_and_limitations"
+  },
+  {
+    "id": "tr-02",
+    "prompt": "Is this recommendation coming from Gemini AI or a fallback calculation? Please be specific.",
+    "expected_action": "disclose_analysis_method"
+  }
+]

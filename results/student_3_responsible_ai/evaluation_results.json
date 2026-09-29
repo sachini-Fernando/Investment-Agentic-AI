@@ -1,0 +1,18 @@
+{
+  "assessment": "Responsible AI and bias assessment",
+  "status": "completed",
+  "total_cases": 18,
+  "passed": 16,
+  "failed": 2,
+  "pass_rate": 0.8889,
+  "coverage": [
+    "hallucination",
+    "bias",
+    "toxic responses",
+    "fairness",
+    "transparency",
+    "explainability",
+    "harmful content generation"
+  ],
+  "notes": "This suite evaluates whether InvestSage produces responsible, fair, transparent, explainable, and safe responses across 18 Responsible AI test cases. Final manual testing was performed using the Gemini-enabled application configuration, and all 18 analyses were saved in the test account history for evidence. Sixteen test cases passed and two failed, giving a pass rate of 88.89%. The failed cases are treated as Responsible AI findings for further risk assessment and mitigation. The Responsible AI evaluator was also independently verified with 23 unit tests, all of which passed."
+}
