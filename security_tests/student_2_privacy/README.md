@@ -24,6 +24,41 @@ tests, evidence, and report material. The `src/security` folder contains
 reusable privacy-security code, following the same pattern as Student 1's
 prompt-security implementation.
 
+## Reusable chat privacy interface
+
+`src.security.student_2_privacy.inspect_privacy` accepts user input, caller
+identity, history, generated response, and audit details. It returns a
+JSON-compatible dictionary with `allowed`, `status`, `reason`, `findings`, and
+sanitized values.
+
+```python
+from src.security.student_2_privacy import inspect_privacy
+
+before_analysis = inspect_privacy(
+   user_input=user_query,
+   user_id=current_user_id,
+   history=history_records,
+)
+if not before_analysis["allowed"]:
+   # Do not call the analysis workflow; show before_analysis["reason"] instead.
+   return before_analysis
+
+# Run the existing analysis workflow here.
+
+after_analysis = inspect_privacy(
+   user_input=user_query,
+   user_id=current_user_id,
+   generated_response=generated_answer,
+   audit_details={"ticker": ticker},
+)
+safe_answer = after_analysis["safe_output"]
+safe_audit_details = after_analysis["safe_audit_details"]
+```
+
+The current Streamlit chat flow now calls this adapter before analysis and
+after response generation. The integration is limited to the existing chat
+boundary; the agentic workflow and persistence architecture are unchanged.
+
 ## Step-by-step execution
 
 1. Open PowerShell at the repository root and activate the environment:

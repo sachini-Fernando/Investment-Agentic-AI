@@ -38,6 +38,7 @@ from src.tools.portfolio_tools import (  # noqa: E402
     suggest_rebalancing,
 )
 from src.tools.llm_tools import _question_focus  # noqa: E402
+from src.security.student_2_privacy import inspect_privacy  # noqa: E402
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -1494,6 +1495,27 @@ def main():
     analyze_button = analyze_button or chat_submitted
 
     if analyze_button and ticker:
+        current_user_id = st.session_state.get("user_id")
+        privacy_precheck = inspect_privacy(
+            user_input=user_query,
+            user_id=current_user_id,
+            # The chat flow does not expose history here. Do not pass the
+            # existing persisted collection as an authorization boundary.
+            history=None,
+        )
+        if not privacy_precheck["allowed"]:
+            log_audit_event(
+                current_user_id,
+                "privacy_blocked",
+                privacy_precheck["safe_audit_details"],
+                "blocked",
+            )
+            st.error(
+                "🚫 Request Blocked\n\n"
+                f"{privacy_precheck['reason']}"
+            )
+            return
+
         if not st.session_state.get("trade_confirmed"):
             st.warning("Please confirm the educational-only trade disclaimer before running an analysis.")
             analyze_button = False
@@ -1507,19 +1529,27 @@ def main():
                 try:
                     result = run_investment_analysis(
                         ticker=ticker,
-                        user_query=user_query if user_query else None,
+                        user_query=privacy_precheck["safe_input"] if user_query else None,
                         use_conditional=use_conditional,
                         use_mongodb=True,
                         investor_profile=investor_profile,
                         alert_rules=alert_rules,
-                        user_id=st.session_state.get("user_id"),
+                        user_id=current_user_id,
                     )
 
-                    st.session_state.analysis_result = result
+                    privacy_postcheck = inspect_privacy(
+                        user_input=privacy_precheck["safe_input"],
+                        user_id=current_user_id,
+                        generated_response=result.get("direct_answer"),
+                        audit_details={"ticker": ticker},
+                    )
+                    safe_result = dict(result)
+                    safe_result["direct_answer"] = privacy_postcheck["safe_output"]
+                    st.session_state.analysis_result = safe_result
                     st.session_state.last_ticker = ticker
                     try:
-                        save_analysis_summary(result, allow_local_fallback=False, user_id=st.session_state.get("user_id"))
-                        log_audit_event(st.session_state.get("user_id"), "analysis_run", {"ticker": ticker, "user_query": user_query}, "success")
+                        save_analysis_summary(safe_result, allow_local_fallback=False, user_id=current_user_id)
+                        log_audit_event(current_user_id, "analysis_run", privacy_postcheck["safe_audit_details"], "success")
                         st.success(f"Analysis completed for {ticker} and saved to MongoDB.")
                     except OSError as history_error:
                         logger.error(f"Unable to save MongoDB history: {history_error}")
