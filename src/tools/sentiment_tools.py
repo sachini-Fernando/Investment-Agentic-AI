@@ -81,8 +81,8 @@ def analyze_news_sentiment(articles: List[Dict]) -> Dict[str, Any]:
         
         if not articles:
             return {
-                'overall_score': 0.0,
-                'overall_confidence': 0.0,
+                'overall_score': None,
+                'overall_confidence': None,
                 'sentiment_breakdown': {},
                 'positive_count': 0,
                 'negative_count': 0,
@@ -116,8 +116,8 @@ def analyze_news_sentiment(articles: List[Dict]) -> Dict[str, Any]:
         
         if not scores:
             return {
-                'overall_score': 0.0,
-                'overall_confidence': 0.0,
+                'overall_score': None,
+                'overall_confidence': None,
                 'sentiment_breakdown': {},
                 'positive_count': 0,
                 'negative_count': 0,

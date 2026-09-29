@@ -14,6 +14,12 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from loguru import logger
+from dotenv import load_dotenv
+
+# Load credentials before any MarketDataIngestion instances are created.
+# data_tools constructs its ingestion client at module import time, which can
+# happen before the graph's optional checkpoint module loads .env.
+load_dotenv()
 
 try:
     import pandas as pd
