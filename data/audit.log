@@ -64,3 +64,13 @@
 {"timestamp": "2026-10-02T07:15:34.194743+00:00", "user_id": "student2", "action": "account_created", "details": {"source": "streamlit"}, "outcome": "success"}
 {"timestamp": "2026-10-02T07:15:58.173519+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
 
+{"timestamp": "2026-10-02T08:56:41.069986+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-10-02T08:58:15.746039+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T08:58:50.321816+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T08:59:14.154123+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T08:59:38.386018+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T09:01:01.168148+00:00", "user_id": "student2", "action": "analysis_run", "details": {"ticker": "AAPL"}, "outcome": "success"}
+{"timestamp": "2026-10-02T09:01:51.387825+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T09:02:20.898473+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T09:02:45.128166+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T09:03:08.805031+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
