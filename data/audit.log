@@ -59,3 +59,6 @@
 {"timestamp": "2026-09-30T14:44:37.583752+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
 {"timestamp": "2026-09-30T14:45:20.949409+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
 {"timestamp": "2026-09-30T14:45:58.438431+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-10-02T07:14:53.587991+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
+{"timestamp": "2026-10-02T07:15:34.194743+00:00", "user_id": "student2", "action": "account_created", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-10-02T07:15:58.173519+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}

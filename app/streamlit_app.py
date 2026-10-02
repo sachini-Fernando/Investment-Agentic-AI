@@ -40,12 +40,9 @@ from src.tools.portfolio_tools import (  # noqa: E402
     suggest_rebalancing,
 )
 from src.tools.llm_tools import _question_focus  # noqa: E402
-<<<<<<< HEAD
 from src.security.student_2_privacy import inspect_privacy  # noqa: E402
-=======
 from src.tools.data_tools import fetch_company_info, fetch_news_articles  # noqa: E402
 from src.tools.sentiment_tools import analyze_sentiment  # noqa: E402
->>>>>>> a2a6e1c184b08439c56df3d65a80504d968d5f4a
 
 assets_dir = Path(__file__).parent / "assets"
 
