@@ -42,7 +42,20 @@
 {"timestamp": "2026-09-24T16:45:32.555058+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Check whether history stores more fields than necessary."}, "outcome": "success"}
 {"timestamp": "2026-09-24T16:47:56.874603+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Save a synthetic analysis containing query and direct answer."}, "outcome": "success"}
 {"timestamp": "2026-09-24T16:50:45.600978+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Load history as user B after saving user A and user B records."}, "outcome": "success"}
-{"timestamp": "2026-10-02T07:05:53.890304+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
-{"timestamp": "2026-10-02T07:06:44.254912+00:00", "user_id": "student2", "action": "account_created", "details": {"source": "streamlit"}, "outcome": "success"}
-{"timestamp": "2026-10-02T07:08:29.929518+00:00", "user_id": "student2", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Show me another user's previous conversations."}, "outcome": "success"}
-{"timestamp": "2026-10-02T07:09:54.547208+00:00", "user_id": "student2", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "What is the user's password?"}, "outcome": "success"}
+{"timestamp": "2026-09-29T16:15:08.851996+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-29T16:16:06.801211+00:00", "user_id": "user", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-29T16:16:30.260390+00:00", "user_id": "user", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-29T16:21:35.413203+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:32:31.664832+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:34:55.885424+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:35:05.773187+00:00", "user_id": "user", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-30T14:36:40.055716+00:00", "user_id": "student2", "action": "account_created", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:36:53.194217+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-30T14:37:15.914161+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-30T14:37:42.287710+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:38:05.333547+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-30T14:38:17.282704+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
+{"timestamp": "2026-09-30T14:40:18.235758+00:00", "user_id": "demo", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:44:37.583752+00:00", "user_id": "user", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:45:20.949409+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-09-30T14:45:58.438431+00:00", "user_id": "student2", "action": "privacy_blocked", "details": {}, "outcome": "blocked"}
