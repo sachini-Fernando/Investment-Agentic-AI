@@ -6,6 +6,8 @@ Provides an interactive dashboard for investment analysis.
 
 import sys
 import base64
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Make the repository root importable when Streamlit executes this file.
@@ -38,7 +40,12 @@ from src.tools.portfolio_tools import (  # noqa: E402
     suggest_rebalancing,
 )
 from src.tools.llm_tools import _question_focus  # noqa: E402
+<<<<<<< HEAD
 from src.security.student_2_privacy import inspect_privacy  # noqa: E402
+=======
+from src.tools.data_tools import fetch_company_info, fetch_news_articles  # noqa: E402
+from src.tools.sentiment_tools import analyze_sentiment  # noqa: E402
+>>>>>>> a2a6e1c184b08439c56df3d65a80504d968d5f4a
 
 assets_dir = Path(__file__).parent / "assets"
 
@@ -865,57 +872,161 @@ def render_company_info(state):
 
 
 def render_sentiment_analysis(state):
-    """Renders sentiment analysis section."""
+    """Render ticker news sentiment, coverage, trends, and supporting articles."""
     section_title("message", "Sentiment Analysis", "amber")
+    ticker = state.get("ticker", "Unknown")
+    raw_articles = state.get("news_articles") or []
+    company_name = (state.get("company_info") or {}).get("name", "")
+    ticker_pattern = re.compile(rf"(?<![A-Z0-9]){re.escape(ticker.upper())}(?![A-Z0-9])")
+    company_pattern = re.compile(re.escape(company_name), re.IGNORECASE) if company_name else None
 
-    if state.get("sentiment_score") is not None:
-        score = state["sentiment_score"]
-        confidence = state.get("sentiment_confidence", 0)
+    def article_date(article):
+        value = article.get("published_at") or article.get("date")
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            return None
 
-        fig = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=score,
-                domain={"x": [0, 1], "y": [0, 1]},
-                title={"text": "Sentiment Score"},
-                gauge={
-                    "axis": {"range": [-1, 1]},
-                    "bar": {"color": "#c85c3d"},
-                    "steps": [
-                        {"range": [-1, -0.33], "color": "#ff7070"},
-                        {"range": [-0.33, 0.33], "color": "#a7b8cf"},
-                        {"range": [0.33, 1], "color": "#49d39c"},
-                    ],
-                    "threshold": {
-                        "line": {"color": "#b9823b", "width": 4},
-                        "thickness": 0.75,
-                        "value": 0,
-                    },
-                },
-            )
-        )
+    articles = []
+    for article in raw_articles:
+        text = " ".join(str(article.get(field) or "") for field in ("title", "summary", "content"))
+        relevant = bool(ticker_pattern.search(text) or (company_pattern and company_pattern.search(text)))
+        scored = dict(article)
+        scored["_ticker_relevant"] = relevant
+        scored["_sentiment"] = analyze_sentiment(text) if text.strip() else None
+        scored["_published"] = article_date(article)
+        articles.append(scored)
 
+    relevant_articles = [article for article in articles if article["_ticker_relevant"]]
+    source_names = sorted({str(a.get("source") or a.get("source_type") or "Unknown") for a in relevant_articles})
+    filter_col1, filter_col2 = st.columns(2)
+    with filter_col1:
+        date_window = st.selectbox("News date range", ["All available", "Last 7 days", "Last 30 days", "Last 90 days"], key="sentiment_date_range")
+    with filter_col2:
+        selected_sources = st.multiselect("News sources", source_names, default=source_names, key="sentiment_sources")
+
+    days = {"Last 7 days": 7, "Last 30 days": 30, "Last 90 days": 90}.get(date_window)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days) if days else None
+    filtered = [
+        article for article in relevant_articles
+        if (article.get("source") or article.get("source_type") or "Unknown") in selected_sources
+        and (cutoff is None or (article["_published"] and article["_published"] >= cutoff))
+    ]
+    analyzed = [article for article in filtered if article.get("_sentiment")]
+    if analyzed:
+        score = sum(article["_sentiment"]["score"] for article in analyzed) / len(analyzed)
+        confidence = sum(article["_sentiment"]["confidence"] for article in analyzed) / len(analyzed)
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number", value=score, domain={"x": [0, 1], "y": [0, 1]},
+            title={"text": f"{ticker} Sentiment Score"},
+            gauge={"axis": {"range": [-1, 1]}, "bar": {"color": "#c85c3d"},
+                   "steps": [{"range": [-1, -0.33], "color": "#ff7070"},
+                             {"range": [-0.33, 0.33], "color": "#a7b8cf"},
+                             {"range": [0.33, 1], "color": "#49d39c"}],
+                   "threshold": {"line": {"color": "#b9823b", "width": 4}, "thickness": 0.75, "value": 0}},
+        ))
         st.plotly_chart(fig, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Confidence", f"{confidence:.2%}")
-        with col2:
-            sentiment_label = "Positive" if score > 0.3 else "Negative" if score < -0.3 else "Neutral"
-            st.metric("Sentiment", sentiment_label)
-
-        with st.expander("📰 Full News Summary", expanded=True):
-            st.write(state.get("news_summary") or "No news summary is available.")
-
-        with st.expander("📌 Key Events", expanded=True):
-            key_events = state.get("key_events") or []
-            if key_events:
-                for event in key_events:
-                    st.markdown(f"- {event}")
-            else:
-                st.write("No key events were identified.")
+        c1, c2, c3, c4 = st.columns(4)
+        label = "Positive" if score > 0.3 else "Negative" if score < -0.3 else "Neutral"
+        c1.metric("Filtered sentiment", label)
+        c2.metric("Average confidence", f"{confidence:.1%}")
+        c3.metric("Relevant coverage", f"{len(relevant_articles)} / {len(raw_articles)}", "articles mention ticker/company")
+        dated = [article["_published"] for article in relevant_articles if article["_published"]]
+        age_days = (datetime.now(timezone.utc) - max(dated)).days if dated else None
+        c4.metric("Most recent coverage", f"{age_days} days ago" if age_days is not None else "Unknown")
     else:
-        st.warning("No sentiment analysis available")
+        st.info(f"No usable, ticker relevant articles match the selected date and source filters for {ticker}.")
+
+    if relevant_articles:
+        trend_by_day = {}
+        for article in filtered:
+            if article["_published"] and article.get("_sentiment"):
+                day = article["_published"].date().isoformat()
+                trend_by_day.setdefault(day, []).append(article["_sentiment"]["score"])
+        if trend_by_day:
+            trend_days = sorted(trend_by_day)
+            trend_fig = go.Figure(go.Scatter(
+                x=trend_days,
+                y=[sum(trend_by_day[day]) / len(trend_by_day[day]) for day in trend_days],
+                mode="lines+markers", name="Daily sentiment",
+            ))
+            trend_fig.update_layout(title="News sentiment trend", xaxis_title="Published date", yaxis_title="Average sentiment", yaxis_range=[-1, 1])
+            st.plotly_chart(trend_fig, use_container_width=True)
+        else:
+            st.caption("A sentiment trend will appear when article publication dates are available.")
+
+        theme_terms = {
+            "Earnings and revenue": ("earnings", "revenue", "profit", "loss", "guidance"),
+            "Products and growth": ("product", "launch", "growth", "expansion", "customer"),
+            "Legal and regulation": ("lawsuit", "regulation", "investigation", "approval", "fine"),
+            "Leadership and workforce": ("ceo", "executive", "layoff", "hiring", "management"),
+            "Markets and competition": ("market", "competition", "share", "analyst", "upgrade", "downgrade"),
+        }
+        theme_rows = []
+        combined_text = " ".join(" ".join(str(a.get(field) or "") for field in ("title", "summary", "content")).lower() for a in filtered)
+        for theme, terms in theme_terms.items():
+            count = sum(len(re.findall(rf"\b{re.escape(term)}\b", combined_text)) for term in terms)
+            if count:
+                theme_rows.append({"Theme": theme, "Mentions": count})
+        if theme_rows:
+            st.markdown("**Recurring news themes**")
+            st.dataframe(theme_rows, use_container_width=True, hide_index=True)
+
+    with st.expander(f"Article details ({len(filtered)} matching articles)", expanded=True):
+        if not raw_articles:
+            st.write("No news articles were returned by the available news sources for this ticker.")
+        elif not relevant_articles:
+            st.warning("Articles were returned, but none clearly mention the selected ticker or company name. They are excluded from the sentiment score.")
+        elif not filtered:
+            st.write("No articles match the selected date and source filters.")
+        else:
+            for article in sorted(filtered, key=lambda item: item["_published"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True):
+                sentiment = article.get("_sentiment") or {}
+                article_score = sentiment.get("score")
+                article_label = "Positive" if article_score is not None and article_score > 0.3 else "Negative" if article_score is not None and article_score < -0.3 else "Neutral" if article_score is not None else "Unavailable"
+                st.markdown(f"**{article.get('title') or 'Untitled article'}**")
+                score_text = f"score {article_score:+.2f}" if article_score is not None else "score unavailable"
+                st.caption(f"{article.get('source') or article.get('source_type') or 'Unknown source'} · {article.get('published_at') or article.get('date') or 'Date unavailable'} · {article_label} ({score_text}) · confidence {sentiment.get('confidence', 0):.0%}")
+                detail = article.get("summary") or article.get("content")
+                if detail:
+                    st.write(detail)
+                if article.get("url"):
+                    st.markdown(f"[Read source]({article['url']})")
+                st.divider()
+
+    with st.expander("Compare tickers", expanded=False):
+        known_tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "V", "JNJ", "SPY"]
+        if ticker not in known_tickers:
+            known_tickers.append(ticker)
+        compare_tickers = st.multiselect("Tickers to compare", known_tickers, default=[ticker], max_selections=5, key="sentiment_compare_tickers")
+        if st.button("Compare news sentiment", key="run_sentiment_comparison"):
+            comparison = []
+            with st.spinner("Fetching news and calculating ticker sentiment..."):
+                for compare_ticker in compare_tickers:
+                    try:
+                        compare_articles = fetch_news_articles(compare_ticker) or []
+                        scores = []
+                        compare_name = ((fetch_company_info(compare_ticker) or {}).get("name") or "")
+                        ticker_re = re.compile(rf"(?<![A-Z0-9]){re.escape(compare_ticker)}(?![A-Z0-9])", re.IGNORECASE)
+                        company_re = re.compile(re.escape(compare_name), re.IGNORECASE) if compare_name else None
+                        for item in compare_articles:
+                            text = " ".join(str(item.get(field) or "") for field in ("title", "summary", "content"))
+                            if (ticker_re.search(text) or (company_re and company_re.search(text))) and text.strip():
+                                scores.append(analyze_sentiment(text)["score"])
+                        comparison.append({"Ticker": compare_ticker, "Relevant articles": len(scores), "Average sentiment": sum(scores) / len(scores) if scores else None})
+                    except Exception as exc:
+                        logger.warning(f"Could not compare sentiment for {compare_ticker}: {exc}")
+                        comparison.append({"Ticker": compare_ticker, "Relevant articles": 0, "Average sentiment": None})
+            if comparison:
+                st.dataframe(comparison, use_container_width=True, hide_index=True)
+                compare_chart_data = [row for row in comparison if row["Average sentiment"] is not None]
+                if compare_chart_data:
+                    compare_fig = go.Figure(go.Bar(x=[row["Ticker"] for row in compare_chart_data], y=[row["Average sentiment"] for row in compare_chart_data]))
+                    compare_fig.update_layout(title="Ticker sentiment comparison", yaxis_title="Average sentiment", yaxis_range=[-1, 1])
+                    st.plotly_chart(compare_fig, use_container_width=True)
 
 
 def render_technical_indicators(state):
