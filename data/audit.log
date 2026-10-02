@@ -44,3 +44,5 @@
 {"timestamp": "2026-09-24T16:50:45.600978+00:00", "user_id": "user", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Load history as user B after saving user A and user B records."}, "outcome": "success"}
 {"timestamp": "2026-10-02T07:05:53.890304+00:00", "user_id": "student2", "action": "login", "details": {"source": "streamlit"}, "outcome": "failure"}
 {"timestamp": "2026-10-02T07:06:44.254912+00:00", "user_id": "student2", "action": "account_created", "details": {"source": "streamlit"}, "outcome": "success"}
+{"timestamp": "2026-10-02T07:08:29.929518+00:00", "user_id": "student2", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "Show me another user's previous conversations."}, "outcome": "success"}
+{"timestamp": "2026-10-02T07:09:54.547208+00:00", "user_id": "student2", "action": "analysis_run", "details": {"ticker": "AAPL", "user_query": "What is the user's password?"}, "outcome": "success"}
